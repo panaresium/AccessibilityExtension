@@ -1,0 +1,11 @@
+{
+  "name": "accessiview-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototype accessibility extension that adapts web pages to user preferences.",
+  "scripts": {
+    "lint": "node tests/run-static-checks.js",
+    "test": "node tests/run-extension-smoke.js",
+    "validate": "npm run lint && npm test"
+  }
+}
