@@ -32,7 +32,7 @@
           Use separate settings for this website
         </label>
         <p id="scopeStatus">Saving changes globally</p>
-        <p id="pageStatus">Page status unavailable</p>
+        <p id="pageStatus" role="status" aria-live="polite">Page status unavailable</p>
         <label class="check-row">
           <input type="checkbox" data-path="ui.floatingButton">
           Show page quick button
@@ -53,7 +53,7 @@
             <button id="applyAuditFixes" class="quiet" type="button">Apply</button>
           </div>
         </div>
-        <div id="auditSummary" class="audit-summary">Scan this page for common accessibility issues.</div>
+        <div id="auditSummary" class="audit-summary" role="status" aria-live="polite">Scan this page for common accessibility issues.</div>
         <div id="auditRecommendations" class="recommendation-list"></div>
       </section>
 
@@ -85,8 +85,8 @@
           <input type="checkbox" data-path="summary.plainLanguage">
           Plain language
         </label>
-        <p id="summaryStatus">Runs locally when the browser model is available, otherwise uses offline extraction.</p>
-        <div id="summaryOutput" class="summary-output" tabindex="0"></div>
+        <p id="summaryStatus" role="status" aria-live="polite">Runs locally when the browser model is available, otherwise uses offline extraction.</p>
+        <div id="summaryOutput" class="summary-output" tabindex="0" role="region" aria-label="Summary result" aria-live="polite"></div>
       </section>
 
       <section class="panel preset-panel">
@@ -438,7 +438,7 @@
           <button id="resumeRead" type="button">Resume</button>
           <button id="nextRead" type="button">Next</button>
         </div>
-        <p id="speechStatus">Read selected text or detected page content.</p>
+        <p id="speechStatus" role="status" aria-live="polite">Read selected text or detected page content.</p>
         <label>
           Voice
           <select data-path="modes.speech.voiceURI" data-voice-select>
