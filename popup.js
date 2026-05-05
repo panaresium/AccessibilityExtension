@@ -215,6 +215,14 @@
       applyAuditRecommendations();
     });
 
+    document.getElementById("inspectStructure").addEventListener("click", () => {
+      inspectPageStructure();
+    });
+
+    document.getElementById("inspectTabOrder").addEventListener("click", () => {
+      inspectTabOrder();
+    });
+
     document.getElementById("summarizePage").addEventListener("click", () => {
       summarizePage();
     });
@@ -372,7 +380,7 @@
   }
 
   function setupCollapsibleSections() {
-    document.querySelectorAll(".audit-panel, .summary-panel, .preset-panel, .profile-panel, .mode-card, .speech-panel").forEach((section, index) => {
+    document.querySelectorAll(".audit-panel, .structure-panel, .summary-panel, .preset-panel, .profile-panel, .mode-card, .speech-panel").forEach((section, index) => {
       const header = section.querySelector(".mode-title, .section-heading");
       if (!header || section.dataset.collapsibleReady === "true") {
         return;
@@ -581,6 +589,172 @@
       item.append(title, description);
       list.append(item);
     });
+  }
+
+  function inspectPageStructure() {
+    setStructureSummary("Inspecting headings, landmarks, forms, and live regions...");
+    clearStructureOutput();
+
+    sendMessageToActiveTab({ type: "ACCESSIVIEW_GET_STRUCTURE_MAP" }, (response) => {
+      if (!response || !response.ok || !response.structure) {
+        setStructureSummary(response && response.message ? response.message : "Reload the page if structure inspection is unavailable.");
+        return;
+      }
+
+      renderPageStructure(response.structure);
+    });
+  }
+
+  function inspectTabOrder() {
+    setStructureSummary("Inspecting visible keyboard focus order...");
+    clearStructureOutput();
+
+    sendMessageToActiveTab({ type: "ACCESSIVIEW_GET_TAB_ORDER" }, (response) => {
+      if (!response || !response.ok || !response.tabOrder) {
+        setStructureSummary(response && response.message ? response.message : "Reload the page if tab order inspection is unavailable.");
+        return;
+      }
+
+      renderTabOrder(response.tabOrder);
+    });
+  }
+
+  function renderPageStructure(structure) {
+    const counts = structure.counts || {};
+    const issueCount = (counts.headingIssues || 0) + (counts.missingAlt || 0) + (counts.unlabeledControls || 0);
+    setStructureSummary(
+      `${counts.headings || 0} headings, ` +
+      `${counts.landmarks || 0} landmarks, ` +
+      `${counts.liveRegions || 0} live regions, ` +
+      `${issueCount} structure issues.`
+    );
+
+    const output = clearStructureOutput();
+    appendStructureGroup(output, "Heading outline", (structure.headings || []).slice(0, 12), (heading) => ({
+      title: `H${heading.level || "?"}: ${heading.text || "Untitled heading"}`,
+      detail: heading.selector || "",
+      meta: heading.issues && heading.issues.length ? heading.issues.join(", ") : "OK",
+      warning: Boolean(heading.issues && heading.issues.length)
+    }));
+    appendStructureGroup(output, "Landmarks", (structure.landmarks || []).slice(0, 10), (landmark) => ({
+      title: landmark.name ? `${landmark.role}: ${landmark.name}` : landmark.role,
+      detail: landmark.selector || "",
+      meta: landmark.name ? "Named landmark" : "Unnamed landmark",
+      warning: !landmark.name && landmark.role === "region"
+    }));
+    appendStructureGroup(output, "Forms", (structure.forms || []).slice(0, 8), (form) => ({
+      title: form.name || "Form",
+      detail: form.selector || "",
+      meta: `${form.controls || 0} controls, ${form.unlabeledControls || 0} unlabeled, ${form.requiredFields || 0} required`,
+      warning: Boolean(form.unlabeledControls)
+    }));
+    appendStructureGroup(output, "Live regions", (structure.liveRegions || []).slice(0, 8), (region) => ({
+      title: `${region.role || "region"}${region.live ? ` (${region.live})` : ""}`,
+      detail: region.selector || "",
+      meta: region.name || "No accessible name",
+      warning: false
+    }));
+    appendStructureGroup(output, "Missing image alt", (structure.missingAlt || []).slice(0, 8), (image) => ({
+      title: image.text || "Image without alternative text",
+      detail: image.selector || "",
+      meta: "Needs alt text or decorative handling",
+      warning: true
+    }));
+  }
+
+  function renderTabOrder(tabOrder) {
+    const counts = tabOrder.counts || {};
+    setStructureSummary(
+      `${counts.focusTargets || 0} focus targets. ` +
+      `${counts.positiveTabIndex || 0} positive tabindex, ` +
+      `${counts.missingNames || 0} missing names, ` +
+      `${counts.smallTargets || 0} small targets.`
+    );
+
+    const output = clearStructureOutput();
+    appendStructureGroup(output, "Tab order", (tabOrder.items || []).slice(0, 18), (item) => {
+      const issues = [];
+      if (item.positiveTabIndex) {
+        issues.push(`positive tabindex ${item.explicitTabIndex}`);
+      }
+      if (item.missingName) {
+        issues.push("missing name");
+      }
+      if (item.smallTarget) {
+        issues.push("small target");
+      }
+      if (item.offscreen) {
+        issues.push("offscreen");
+      }
+
+      return {
+        title: `${item.index}. ${item.label || item.role || "Focus target"}`,
+        detail: item.selector || "",
+        meta: issues.length ? issues.join(", ") : `tabIndex ${item.tabIndex}`,
+        warning: Boolean(issues.length)
+      };
+    });
+  }
+
+  function setStructureSummary(text) {
+    const summary = document.getElementById("structureSummary");
+    if (summary) {
+      summary.textContent = text;
+    }
+  }
+
+  function clearStructureOutput() {
+    const output = document.getElementById("structureOutput");
+    if (output) {
+      output.textContent = "";
+    }
+    return output;
+  }
+
+  function appendStructureGroup(output, title, items, mapItem) {
+    if (!output) {
+      return;
+    }
+
+    const group = document.createElement("section");
+    const heading = document.createElement("h3");
+    group.className = "structure-group";
+    heading.textContent = title;
+    group.append(heading);
+
+    if (!items.length) {
+      appendStructureItem(group, "None detected", "", "", false);
+      output.append(group);
+      return;
+    }
+
+    items.forEach((item) => {
+      const view = mapItem(item);
+      appendStructureItem(group, view.title, view.detail, view.meta, view.warning);
+    });
+
+    output.append(group);
+  }
+
+  function appendStructureItem(group, title, detail, meta, warning) {
+    const item = document.createElement("div");
+    const strong = document.createElement("strong");
+    const detailText = document.createElement("span");
+    const metaText = document.createElement("span");
+
+    item.className = "structure-item";
+    item.classList.toggle("is-warning", Boolean(warning));
+    strong.textContent = title || "Untitled item";
+    detailText.textContent = detail || "";
+    metaText.textContent = meta || "";
+    item.append(strong);
+    if (detailText.textContent) {
+      item.append(detailText);
+    }
+    if (metaText.textContent) {
+      item.append(metaText);
+    }
+    group.append(item);
   }
 
   function applyAuditRecommendations() {
