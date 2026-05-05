@@ -15,7 +15,7 @@
         </div>
         <label class="switch" title="Enable or disable AccessiView">
           <span>On</span>
-          <input id="enabled" type="checkbox">
+          <input id="enabled" type="checkbox" aria-label="Enable AccessiView">
         </label>
       </header>
 
@@ -55,6 +55,18 @@
         </div>
         <div id="auditSummary" class="audit-summary" role="status" aria-live="polite">Scan this page for common accessibility issues.</div>
         <div id="auditRecommendations" class="recommendation-list"></div>
+      </section>
+
+      <section class="panel structure-panel">
+        <div class="section-heading">
+          <h2>Page Structure</h2>
+          <div class="button-row">
+            <button id="inspectStructure" type="button">Inspect</button>
+            <button id="inspectTabOrder" class="quiet" type="button">Tab order</button>
+          </div>
+        </div>
+        <div id="structureSummary" class="structure-summary" role="status" aria-live="polite">Inspect headings, landmarks, live regions, and keyboard focus order.</div>
+        <div id="structureOutput" class="structure-output" role="region" aria-label="Page structure results"></div>
       </section>
 
       <section class="panel summary-panel">
@@ -119,7 +131,7 @@
             <p>Center main content and reduce distractions.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.focus.enabled">
+            <input type="checkbox" data-path="modes.focus.enabled" aria-label="Enable focus mode">
             <span></span>
           </label>
         </div>
@@ -156,7 +168,7 @@
             <p>Keep the main content and remove repeated page regions.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.simplify.enabled">
+            <input type="checkbox" data-path="modes.simplify.enabled" aria-label="Enable simplified page">
             <span></span>
           </label>
         </div>
@@ -185,7 +197,7 @@
             <p>Replace page colors with readable contrast.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.contrast.enabled">
+            <input type="checkbox" data-path="modes.contrast.enabled" aria-label="Enable high contrast">
             <span></span>
           </label>
         </div>
@@ -217,7 +229,7 @@
             <p>Adjust text size, spacing, and font.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.text.enabled">
+            <input type="checkbox" data-path="modes.text.enabled" aria-label="Enable reading text mode">
             <span></span>
           </label>
         </div>
@@ -251,7 +263,7 @@
             <p>Stop animation and media interruptions.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.motion.enabled">
+            <input type="checkbox" data-path="modes.motion.enabled" aria-label="Enable reduce motion">
             <span></span>
           </label>
         </div>
@@ -276,7 +288,7 @@
             <p>Follow the cursor with a reading band.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.guide.enabled">
+            <input type="checkbox" data-path="modes.guide.enabled" aria-label="Enable reading guide">
             <span></span>
           </label>
         </div>
@@ -313,7 +325,7 @@
             <p>Make links, focus states, and images easier to inspect.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.navigation.enabled">
+            <input type="checkbox" data-path="modes.navigation.enabled" aria-label="Enable navigation helpers">
             <span></span>
           </label>
         </div>
@@ -343,7 +355,7 @@
             <p>Highlight fields that need labels, values, or attention.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.forms.enabled">
+            <input type="checkbox" data-path="modes.forms.enabled" aria-label="Enable form helper">
             <span></span>
           </label>
         </div>
@@ -368,7 +380,7 @@
             <p>Reduce page clutter and make reading structure clearer.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.cognitive.enabled">
+            <input type="checkbox" data-path="modes.cognitive.enabled" aria-label="Enable cognitive support">
             <span></span>
           </label>
         </div>
@@ -397,7 +409,7 @@
             <p>Tune color intensity and brightness.</p>
           </div>
           <label class="toggle">
-            <input type="checkbox" data-path="modes.filter.enabled">
+            <input type="checkbox" data-path="modes.filter.enabled" aria-label="Enable color filter">
             <span></span>
           </label>
         </div>

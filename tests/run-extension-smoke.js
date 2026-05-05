@@ -228,7 +228,16 @@ async function run() {
     await optionsPage.waitForSelector("[data-preset]");
     const optionsResult = await optionsPage.evaluate(() => ({
       hasSummaryEngine: Boolean(document.querySelector("[data-path='summary.engine']")),
-      hasSummaryCacheClear: Boolean(document.getElementById("clearSummaryCache"))
+      hasSummaryCacheClear: Boolean(document.getElementById("clearSummaryCache")),
+      hasReadableActivePresetDescription: (() => {
+        const button = document.querySelector("[data-preset]");
+        const description = button && button.querySelector("span");
+        if (!button || !description) {
+          return false;
+        }
+        button.classList.add("is-active");
+        return getComputedStyle(description).color === "rgb(255, 255, 255)";
+      })()
     }));
 
     await setSettings(optionsPage, {
@@ -254,7 +263,17 @@ async function run() {
       cognitiveChunks: document.querySelectorAll("[data-av-cognitive-paragraph='true']").length,
       keyboardMap: Boolean(document.getElementById("accessiview-keyboard-map-host")),
       guide: Boolean(document.getElementById("accessiview-reading-guide")),
-      quickButton: Boolean(document.getElementById("accessiview-quick-button-host"))
+      quickButton: Boolean(document.getElementById("accessiview-quick-button-host")),
+      quickButtonPanelRole: (() => {
+        const host = document.getElementById("accessiview-quick-button-host");
+        const launcher = host && host.shadowRoot && host.shadowRoot.querySelector(".launcher");
+        if (!launcher) {
+          return "";
+        }
+        launcher.click();
+        const panel = host.shadowRoot.querySelector(".panel");
+        return panel ? panel.getAttribute("role") : "";
+      })()
     }));
     const summaryResult = await sendMessageToFixture(optionsPage, "/article.html", {
       type: "ACCESSIVIEW_SUMMARIZE_PAGE",
@@ -322,6 +341,26 @@ async function run() {
       hasSpeechControls: Boolean(document.getElementById("pauseRead") && document.getElementById("nextRead")),
       hasSidePanelButton: Boolean(document.getElementById("openSidePanel")),
       hasSummaryControls: Boolean(document.getElementById("summarizePage") && document.getElementById("summaryOutput")),
+      hasNamedModeSwitches: (() => {
+        const switches = Array.from(document.querySelectorAll(".toggle input[data-path$='.enabled']"));
+        return switches.length >= 10 && switches.every((control) => Boolean(control.getAttribute("aria-label")));
+      })(),
+      hasSwitchFocusStyle: Array.from(document.styleSheets).some((styleSheet) => {
+        try {
+          return Array.from(styleSheet.cssRules).some((rule) => rule.selectorText === ".toggle input:focus-visible + span");
+        } catch (_error) {
+          return false;
+        }
+      }),
+      hasReadableActivePresetDescription: (() => {
+        const button = document.querySelector("[data-preset]");
+        const description = button && button.querySelector("span");
+        if (!button || !description) {
+          return false;
+        }
+        button.classList.add("is-active");
+        return getComputedStyle(description).color === "rgb(255, 255, 255)";
+      })(),
       hasLiveStatusRegions: ["pageStatus", "auditSummary", "summaryStatus", "speechStatus"].every((id) => {
         const element = document.getElementById(id);
         return Boolean(element && element.getAttribute("role") === "status" && element.getAttribute("aria-live") === "polite");
@@ -350,10 +389,10 @@ async function run() {
     if (!automationCoverageResult.includesRegionalCoverage || !automationCoverageResult.includesBuiltInRuleCoverage) {
       throw new Error("Automation coverage catalog is missing regional or built-in site-rule targets.");
     }
-    if (!articleResult.simplifyMain || !articleResult.missingAlt || !articleResult.keyboardMap || !articleResult.guide || !articleResult.quickButton) {
+    if (!articleResult.simplifyMain || !articleResult.missingAlt || !articleResult.keyboardMap || !articleResult.guide || !articleResult.quickButton || articleResult.quickButtonPanelRole !== "group") {
       throw new Error("Article fixture failed AccessiView assertions.");
     }
-    if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear) {
+    if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear || !optionsResult.hasReadableActivePresetDescription) {
       throw new Error("Options fixture failed summary control assertions.");
     }
     if (!summaryResult.ok || summaryResult.method !== "extractive" || !String(summaryResult.summary || "").includes("- ")) {
@@ -365,10 +404,14 @@ async function run() {
     if (!formResult.required || !formResult.unlabeled || !formResult.invalid) {
       throw new Error("Form fixture failed AccessiView assertions.");
     }
+<<<<<<< Updated upstream
     if (formSummaryResult.ok || !String(formSummaryResult.message || "").includes("Summary is disabled")) {
       throw new Error("Sensitive form fixture failed summary privacy assertions.");
     }
     if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls) {
+=======
+    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
+>>>>>>> Stashed changes
       throw new Error("Popup fixture failed AccessiView assertions.");
     }
   } finally {

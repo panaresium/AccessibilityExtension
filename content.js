@@ -291,6 +291,22 @@
           return false;
         }
 
+        if (message.type === "ACCESSIVIEW_GET_STRUCTURE_MAP") {
+          sendResponse({
+            ok: true,
+            structure: getPageStructureMap()
+          });
+          return false;
+        }
+
+        if (message.type === "ACCESSIVIEW_GET_TAB_ORDER") {
+          sendResponse({
+            ok: true,
+            tabOrder: getTabOrderMap()
+          });
+          return false;
+        }
+
         if (message.type === "ACCESSIVIEW_SUMMARIZE_PAGE") {
           summarizeCurrentPage(message.options || {})
             .then(sendResponse)
@@ -3471,6 +3487,309 @@ html.av-guide-line #accessiview-reading-guide {
     };
   }
 
+  function getPageStructureMap() {
+    const roots = getQueryableRoots();
+    const headings = collectVisibleElements(roots, "h1,h2,h3,h4,h5,h6,[role='heading']");
+    const images = collectVisibleElements(roots, "img");
+    const controls = collectVisibleElements(roots, FORM_CONTROL_SELECTOR);
+    const forms = collectVisibleElements(roots, "form");
+    const tables = collectVisibleElements(roots, "table");
+    const landmarks = getPageLandmarks(roots);
+    const liveRegions = getLiveRegionItems(roots);
+    const headingReport = auditHeadings(headings);
+    const headingItems = getHeadingItems(headings).slice(0, 80);
+    const missingAltImages = images.filter((image) => !image.hasAttribute("alt") || image.getAttribute("alt").trim() === "");
+    const missingAltItems = missingAltImages
+      .slice(0, 12)
+      .map((image) => ({
+        selector: getStableCssSelector(image),
+        text: getAccessibleElementName(image) || "Image without alternative text"
+      }));
+
+    return {
+      title: document.title || window.location.hostname || "This page",
+      url: window.location.href,
+      scannedAt: new Date().toISOString(),
+      counts: {
+        headings: headings.length,
+        headingIssues: headingReport.issues,
+        landmarks: landmarks.length,
+        images: images.length,
+        missingAlt: missingAltImages.length,
+        controls: controls.length,
+        unlabeledControls: controls.filter((control) => !hasAccessibleControlName(control)).length,
+        forms: forms.length,
+        tables: tables.length,
+        liveRegions: liveRegions.length
+      },
+      headings: headingItems,
+      landmarks: landmarks.slice(0, 30),
+      forms: forms.slice(0, 20).map(getFormStructureItem),
+      liveRegions: liveRegions.slice(0, 20),
+      missingAlt: missingAltItems
+    };
+  }
+
+  function getHeadingItems(headings) {
+    let previousLevel = 0;
+
+    return headings.map((heading) => {
+      const level = getHeadingLevel(heading);
+      const text = normalizeReaderText(heading.innerText || heading.textContent || getAccessibleElementName(heading));
+      const issues = [];
+
+      if (!level) {
+        issues.push("Missing aria-level");
+      } else if (previousLevel && level - previousLevel > 1) {
+        issues.push(`Skipped from H${previousLevel} to H${level}`);
+      }
+
+      if (!text) {
+        issues.push("Empty heading");
+      }
+
+      if (level) {
+        previousLevel = level;
+      }
+
+      return {
+        level,
+        text: text || "Untitled heading",
+        selector: getStableCssSelector(heading),
+        issues
+      };
+    });
+  }
+
+  function getHeadingLevel(heading) {
+    const roleLevel = Number(heading.getAttribute("aria-level"));
+    return /^H[1-6]$/.test(heading.tagName) ? Number(heading.tagName.slice(1)) : roleLevel;
+  }
+
+  function getPageLandmarks(roots) {
+    const seen = new Set();
+    const landmarks = [];
+    const selector = [
+      "main",
+      "nav",
+      "aside",
+      "header",
+      "footer",
+      "form",
+      "section",
+      "[role='main']",
+      "[role='navigation']",
+      "[role='banner']",
+      "[role='contentinfo']",
+      "[role='complementary']",
+      "[role='search']",
+      "[role='form']",
+      "[role='region']"
+    ].join(",");
+
+    collectVisibleElements(roots, selector).forEach((element) => {
+      const role = getLandmarkRole(element);
+      if (!role) {
+        return;
+      }
+
+      const selectorText = getStableCssSelector(element);
+      if (seen.has(selectorText)) {
+        return;
+      }
+
+      seen.add(selectorText);
+      landmarks.push({
+        role,
+        name: getAccessibleElementName(element),
+        selector: selectorText
+      });
+    });
+
+    return landmarks;
+  }
+
+  function getLandmarkRole(element) {
+    const explicitRole = String(element.getAttribute("role") || "").toLowerCase();
+    if (["main", "navigation", "banner", "contentinfo", "complementary", "search", "form", "region"].includes(explicitRole)) {
+      return explicitRole;
+    }
+
+    if (element.matches("main")) {
+      return "main";
+    }
+
+    if (element.matches("nav")) {
+      return "navigation";
+    }
+
+    if (element.matches("aside")) {
+      return "complementary";
+    }
+
+    if (element.matches("header") && !element.closest("article,aside,main,nav,section")) {
+      return "banner";
+    }
+
+    if (element.matches("footer") && !element.closest("article,aside,main,nav,section")) {
+      return "contentinfo";
+    }
+
+    if (element.matches("form")) {
+      return "form";
+    }
+
+    if (element.matches("section") && getAccessibleElementName(element)) {
+      return "region";
+    }
+
+    return "";
+  }
+
+  function getFormStructureItem(form) {
+    const controls = Array.from(form.querySelectorAll(FORM_CONTROL_SELECTOR))
+      .filter(isVisibleAuditElement);
+
+    return {
+      name: getAccessibleElementName(form) || "Form",
+      selector: getStableCssSelector(form),
+      controls: controls.length,
+      unlabeledControls: controls.filter((control) => !hasAccessibleControlName(control)).length,
+      requiredFields: controls.filter((control) => control.required || control.getAttribute("aria-required") === "true").length
+    };
+  }
+
+  function getLiveRegionItems(roots) {
+    const selector = "[aria-live], [role='status'], [role='alert'], [role='log'], [role='marquee'], [role='timer']";
+    return collectVisibleElements(roots, selector)
+      .slice(0, 40)
+      .map((element) => ({
+        role: element.getAttribute("role") || "region",
+        live: element.getAttribute("aria-live") || getImplicitAriaLive(element),
+        name: getAccessibleElementName(element),
+        selector: getStableCssSelector(element)
+      }));
+  }
+
+  function getImplicitAriaLive(element) {
+    const role = String(element.getAttribute("role") || "").toLowerCase();
+    if (role === "alert") {
+      return "assertive";
+    }
+    if (["status", "log"].includes(role)) {
+      return "polite";
+    }
+    return "";
+  }
+
+  function getTabOrderMap() {
+    const items = queryAllAcrossRoots(KEYBOARD_FOCUSABLE_SELECTOR)
+      .filter(isVisibleKeyboardTarget)
+      .slice(0, 80)
+      .map(getTabOrderItem);
+    const issues = {
+      positiveTabIndex: items.filter((item) => item.positiveTabIndex).length,
+      missingNames: items.filter((item) => item.missingName).length,
+      smallTargets: items.filter((item) => item.smallTarget).length,
+      offscreenTargets: items.filter((item) => item.offscreen).length
+    };
+
+    return {
+      title: document.title || window.location.hostname || "This page",
+      url: window.location.href,
+      scannedAt: new Date().toISOString(),
+      counts: {
+        focusTargets: items.length,
+        issues: issues.positiveTabIndex + issues.missingNames + issues.smallTargets + issues.offscreenTargets,
+        ...issues
+      },
+      items
+    };
+  }
+
+  function getTabOrderItem(element, index) {
+    const rect = element.getBoundingClientRect();
+    const explicitTabIndex = element.getAttribute("tabindex");
+    const label = getKeyboardTargetLabel(element);
+    const tagName = element.tagName.toLowerCase();
+    const role = element.getAttribute("role") || tagName;
+    const missingName = isNameRequiredFocusTarget(element) && !getAccessibleElementName(element);
+
+    return {
+      index: index + 1,
+      role,
+      label,
+      selector: getStableCssSelector(element),
+      tabIndex: element.tabIndex,
+      explicitTabIndex,
+      positiveTabIndex: Number(explicitTabIndex) > 0,
+      missingName,
+      smallTarget: rect.width > 0 && rect.height > 0 && (rect.width < 24 || rect.height < 24),
+      offscreen: rect.bottom < 0 || rect.right < 0 || rect.top > window.innerHeight || rect.left > window.innerWidth
+    };
+  }
+
+  function isNameRequiredFocusTarget(element) {
+    return Boolean(element.matches("a[href], button, input, select, textarea, [role='button'], [role='link'], [role='checkbox'], [role='radio'], [role='menuitem']"));
+  }
+
+  function getAccessibleElementName(element) {
+    if (!element) {
+      return "";
+    }
+
+    const directName = normalizeReaderText(
+      element.getAttribute("aria-label") ||
+      getAriaLabelledByText(element) ||
+      element.getAttribute("alt") ||
+      element.getAttribute("title") ||
+      element.getAttribute("placeholder") ||
+      ""
+    );
+    if (directName) {
+      return directName.slice(0, 120);
+    }
+
+    if (element.id) {
+      const escapedId = cssEscape(element.id);
+      const root = element.getRootNode && element.getRootNode();
+      const label = (root && root.querySelector && root.querySelector(`label[for="${escapedId}"]`)) ||
+        document.querySelector(`label[for="${escapedId}"]`);
+      const labelText = normalizeReaderText(label ? label.innerText || label.textContent : "");
+      if (labelText) {
+        return labelText.slice(0, 120);
+      }
+    }
+
+    const wrappingLabel = element.closest && element.closest("label");
+    const wrappingLabelText = normalizeReaderText(wrappingLabel ? wrappingLabel.innerText || wrappingLabel.textContent : "");
+    if (wrappingLabelText) {
+      return wrappingLabelText.slice(0, 120);
+    }
+
+    const heading = element.querySelector && element.querySelector("h1,h2,h3,h4,h5,h6,[role='heading']");
+    const headingText = normalizeReaderText(heading ? heading.innerText || heading.textContent : "");
+    if (headingText) {
+      return headingText.slice(0, 120);
+    }
+
+    return "";
+  }
+
+  function getAriaLabelledByText(element) {
+    const labelledBy = String(element.getAttribute("aria-labelledby") || "").trim();
+    if (!labelledBy) {
+      return "";
+    }
+
+    const root = element.getRootNode && element.getRootNode();
+    return labelledBy.split(/\s+/)
+      .map((id) => (root && root.getElementById ? root.getElementById(id) : null) || document.getElementById(id))
+      .map((label) => normalizeReaderText(label ? label.innerText || label.textContent : ""))
+      .filter(Boolean)
+      .join(" ");
+  }
+
   function collectVisibleElements(roots, selector) {
     const elements = [];
     roots.forEach((root) => {
@@ -4055,7 +4374,7 @@ html.av-guide-line #accessiview-reading-guide {
         }
       </style>
       ${isOpen ? `
-        <div class="panel" role="menu" aria-label="AccessiView quick controls">
+        <div class="panel" role="group" aria-label="AccessiView quick controls">
           <button type="button" data-action="panel">Open side panel</button>
           <button type="button" data-action="focus" class="${focusOn ? "is-on" : ""}">Focus mode</button>
           <button type="button" data-action="contrast" class="${contrastOn ? "is-on" : ""}">High contrast</button>

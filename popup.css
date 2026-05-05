@@ -190,7 +190,7 @@ p {
 }
 
 .preset-grid button.is-active span {
-  color: rgba(255, 255, 255, 0.86);
+  color: #ffffff;
 }
 
 .audit-summary {
@@ -201,6 +201,68 @@ p {
   background: #f8fafc;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.structure-summary {
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: var(--ink);
+  background: #f8fafc;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.structure-output {
+  display: none;
+  gap: 8px;
+}
+
+.structure-output:not(:empty) {
+  display: grid;
+}
+
+.structure-group {
+  display: grid;
+  gap: 6px;
+}
+
+.structure-group h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.structure-item {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid #bdded6;
+  border-radius: 8px;
+  background: #eef6f3;
+}
+
+.structure-item.is-warning {
+  border-color: #f7c56a;
+  background: #fff7e8;
+}
+
+.structure-item strong,
+.structure-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.structure-item strong {
+  color: #083b35;
+  font-size: 12px;
+}
+
+.structure-item span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .recommendation-list {
@@ -426,6 +488,11 @@ select {
   background: var(--accent);
 }
 
+.toggle input:focus-visible + span {
+  outline: 3px solid #facc15;
+  outline-offset: 3px;
+}
+
 .toggle input:checked + span::after {
   transform: translateX(20px);
 }
@@ -439,6 +506,7 @@ select {
 }
 
 .audit-panel,
+.structure-panel,
 .summary-panel {
   border-color: #bdded6;
 }
