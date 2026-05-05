@@ -321,7 +321,15 @@ async function run() {
       hasUndo: Boolean(document.getElementById("undoSettings")),
       hasSpeechControls: Boolean(document.getElementById("pauseRead") && document.getElementById("nextRead")),
       hasSidePanelButton: Boolean(document.getElementById("openSidePanel")),
-      hasSummaryControls: Boolean(document.getElementById("summarizePage") && document.getElementById("summaryOutput"))
+      hasSummaryControls: Boolean(document.getElementById("summarizePage") && document.getElementById("summaryOutput")),
+      hasLiveStatusRegions: ["pageStatus", "auditSummary", "summaryStatus", "speechStatus"].every((id) => {
+        const element = document.getElementById(id);
+        return Boolean(element && element.getAttribute("role") === "status" && element.getAttribute("aria-live") === "polite");
+      }),
+      hasSummaryResultRegion: (() => {
+        const element = document.getElementById("summaryOutput");
+        return Boolean(element && element.getAttribute("role") === "region" && element.getAttribute("aria-live") === "polite");
+      })()
     }));
 
     const result = { manifestResult, automationCoverageResult, optionsResult, articleResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
