@@ -2514,7 +2514,7 @@ html.av-guide-line #accessiview-reading-guide {
 
     for (let index = 0; index < roots.length; index += 1) {
       roots[index].querySelectorAll("*").forEach((element) => {
-        if (element.id === "accessiview-reader-host") {
+        if (isAccessiViewHost(element)) {
           return;
         }
 
@@ -3767,6 +3767,13 @@ html.av-guide-line #accessiview-reading-guide {
       return wrappingLabelText.slice(0, 120);
     }
 
+    if (element.matches("a[href], button, [role='button'], [role='link'], [role='menuitem']")) {
+      const visibleText = normalizeReaderText(element.innerText || element.textContent || "");
+      if (visibleText) {
+        return visibleText.slice(0, 120);
+      }
+    }
+
     const heading = element.querySelector && element.querySelector("h1,h2,h3,h4,h5,h6,[role='heading']");
     const headingText = normalizeReaderText(heading ? heading.innerText || heading.textContent : "");
     if (headingText) {
@@ -3803,7 +3810,7 @@ html.av-guide-line #accessiview-reading-guide {
   }
 
   function isVisibleAuditElement(element) {
-    if (!element || element.closest("#accessiview-reader-host")) {
+    if (!element || isAccessiViewHost(element)) {
       return false;
     }
 
@@ -4230,7 +4237,7 @@ html.av-guide-line #accessiview-reading-guide {
   }
 
   function isVisibleKeyboardTarget(element) {
-    if (!element || element.disabled || element.closest("#accessiview-reader-host")) {
+    if (!element || element.disabled || isAccessiViewHost(element)) {
       return false;
     }
 
@@ -4669,12 +4676,20 @@ html.av-guide-line #accessiview-reading-guide {
   }
 
   function isAccessiViewHost(element) {
+    const hostSelector = [
+      "#accessiview-content-picker-host",
+      "#accessiview-reader-host",
+      "#accessiview-keyboard-map-host",
+      "#accessiview-quick-button-host",
+      "#accessiview-speech-highlight-host"
+    ].join(",");
+    const root = element && element.getRootNode ? element.getRootNode() : null;
+    const shadowHost = root && root.host;
+
     return Boolean(element && (
-      element.id === "accessiview-content-picker-host" ||
-      element.id === "accessiview-reader-host" ||
-      element.id === "accessiview-keyboard-map-host" ||
-      element.id === "accessiview-speech-highlight-host" ||
-      element.closest("#accessiview-content-picker-host,#accessiview-reader-host,#accessiview-keyboard-map-host,#accessiview-speech-highlight-host")
+      element.matches(hostSelector) ||
+      element.closest(hostSelector) ||
+      (shadowHost && (shadowHost.matches(hostSelector) || shadowHost.closest(hostSelector)))
     ));
   }
 

@@ -23,6 +23,7 @@ AccessiView is a Chrome extension prototype for adapting web pages to user acces
 - Read aloud transport controls for pause, resume, previous segment, and next segment.
 - Local page summary panel that runs on the browser's on-device Summarizer API when available, falls back to offline extractive summarization, caches summaries locally, and can read the summary aloud.
 - Accessibility Health scan in the popup with page-specific recommendations.
+- Page Structure inspection for headings, landmarks, forms, live regions, missing image alt text, and static keyboard tab order diagnostics.
 - Built-in site rule packs for difficult websites, including MSN, Thaiware, and Wikipedia-style article pages.
 - Manual main-content picker that saves a selected content region for the current website.
 - Undo for the last global or current-site settings change.

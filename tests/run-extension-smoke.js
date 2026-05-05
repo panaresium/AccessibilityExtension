@@ -275,6 +275,23 @@ async function run() {
         return panel ? panel.getAttribute("role") : "";
       })()
     }));
+    const overlayTabOrderResult = await sendMessageToFixture(optionsPage, "/article.html", {
+      type: "ACCESSIVIEW_GET_TAB_ORDER"
+    });
+    await setSettings(optionsPage, {
+      enabled: true
+    });
+
+    const structurePage = await context.newPage();
+    await structurePage.goto(`${baseUrl}/article.html?structure=1`);
+    await structurePage.waitForSelector("main");
+    const structureResult = await sendMessageToFixture(optionsPage, "/article.html?structure=1", {
+      type: "ACCESSIVIEW_GET_STRUCTURE_MAP"
+    });
+    const tabOrderResult = await sendMessageToFixture(optionsPage, "/article.html?structure=1", {
+      type: "ACCESSIVIEW_GET_TAB_ORDER"
+    });
+    await structurePage.close();
     const summaryResult = await sendMessageToFixture(optionsPage, "/article.html", {
       type: "ACCESSIVIEW_SUMMARIZE_PAGE",
       options: {
@@ -341,6 +358,7 @@ async function run() {
       hasSpeechControls: Boolean(document.getElementById("pauseRead") && document.getElementById("nextRead")),
       hasSidePanelButton: Boolean(document.getElementById("openSidePanel")),
       hasSummaryControls: Boolean(document.getElementById("summarizePage") && document.getElementById("summaryOutput")),
+      hasStructureControls: Boolean(document.getElementById("inspectStructure") && document.getElementById("inspectTabOrder") && document.getElementById("structureOutput")),
       hasNamedModeSwitches: (() => {
         const switches = Array.from(document.querySelectorAll(".toggle input[data-path$='.enabled']"));
         return switches.length >= 10 && switches.every((control) => Boolean(control.getAttribute("aria-label")));
@@ -371,7 +389,7 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, optionsResult, articleResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, optionsResult, articleResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -392,6 +410,15 @@ async function run() {
     if (!articleResult.simplifyMain || !articleResult.missingAlt || !articleResult.keyboardMap || !articleResult.guide || !articleResult.quickButton || articleResult.quickButtonPanelRole !== "group") {
       throw new Error("Article fixture failed AccessiView assertions.");
     }
+    if (!structureResult.ok || !structureResult.structure || structureResult.structure.counts.headings < 1 || structureResult.structure.counts.landmarks < 1 || structureResult.structure.counts.missingAlt < 1) {
+      throw new Error("Page structure fixture failed AccessiView assertions.");
+    }
+    if (!overlayTabOrderResult.ok || !overlayTabOrderResult.tabOrder || overlayTabOrderResult.tabOrder.items.some((item) => /accessiview|Open side panel|Focus mode|High contrast|Reduce motion|Turn off on page/i.test(`${item.selector} ${item.label}`))) {
+      throw new Error("Tab order fixture included AccessiView overlay controls.");
+    }
+    if (!tabOrderResult.ok || !tabOrderResult.tabOrder || tabOrderResult.tabOrder.counts.focusTargets < 1 || tabOrderResult.tabOrder.counts.missingNames !== 0 || !tabOrderResult.tabOrder.items[0].selector) {
+      throw new Error("Tab order fixture failed AccessiView assertions.");
+    }
     if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear || !optionsResult.hasReadableActivePresetDescription) {
       throw new Error("Options fixture failed summary control assertions.");
     }
@@ -404,14 +431,10 @@ async function run() {
     if (!formResult.required || !formResult.unlabeled || !formResult.invalid) {
       throw new Error("Form fixture failed AccessiView assertions.");
     }
-<<<<<<< Updated upstream
     if (formSummaryResult.ok || !String(formSummaryResult.message || "").includes("Summary is disabled")) {
       throw new Error("Sensitive form fixture failed summary privacy assertions.");
     }
-    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls) {
-=======
-    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
->>>>>>> Stashed changes
+    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
       throw new Error("Popup fixture failed AccessiView assertions.");
     }
   } finally {
