@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>AccessiView Shadow Fixture</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 24px auto;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Shadow and Iframe Fixture</h1>
+      <p>This page checks whether open shadow roots and frames receive common accessibility styling.</p>
+      <shadow-article></shadow-article>
+      <iframe title="fixture frame" srcdoc="<!doctype html><html><body><main><h2>Frame text</h2><p>Readable frame content for testing all-frame coverage.</p><img src='x.png'></main></body></html>"></iframe>
+    </main>
+    <script>
+      customElements.define("shadow-article", class extends HTMLElement {
+        connectedCallback() {
+          const root = this.attachShadow({ mode: "open" });
+          root.innerHTML = "<article><h2>Shadow article</h2><p>Readable text inside an open shadow root.</p><img src='shadow.png'></article>";
+        }
+      });
+    </script>
+  </body>
+</html>

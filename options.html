@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AccessiView Settings</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main class="settings-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Prototype settings</p>
+          <h1>AccessiView</h1>
+          <p class="summary">Customize each accessibility mode and reuse those settings on any web page.</p>
+        </div>
+        <label class="switch">
+          Extension enabled
+          <input id="enabled" type="checkbox">
+        </label>
+      </header>
+
+      <section class="preset-row" aria-label="Accessibility presets">
+        <div class="preset-grid-wide" data-preset-list></div>
+      </section>
+
+      <section class="card utility-card profile-manager">
+        <div class="card-title">
+          <h2>Custom Profiles</h2>
+        </div>
+        <label>Profile name
+          <input id="profileName" type="text" placeholder="Work reading, News sites, Form filling">
+        </label>
+        <label>Saved profile
+          <select id="profileSelect"></select>
+        </label>
+        <div class="actions">
+          <button id="saveProfile" type="button">Save Current</button>
+          <button id="applyProfile" type="button">Apply</button>
+          <button id="deleteProfile" type="button">Delete</button>
+          <button id="exportProfile" type="button">Export Profile</button>
+          <button id="importProfile" type="button">Import Profile</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card" data-mode-card="focus">
+          <div class="card-title">
+            <h2>Focus Mode</h2>
+            <input type="checkbox" data-path="modes.focus.enabled" aria-label="Enable focus mode">
+          </div>
+          <label>Distraction handling
+            <select data-path="modes.focus.distractionMode">
+              <option value="dim">Dim distractions</option>
+              <option value="hide">Hide distractions</option>
+            </select>
+          </label>
+          <label>Main content width <output data-output="modes.focus.maxWidth" data-suffix="px"></output>
+            <input type="range" min="560" max="1180" step="20" data-path="modes.focus.maxWidth">
+          </label>
+          <label>Dim strength <output data-output="modes.focus.dimOpacity"></output>
+            <input type="range" min="0.04" max="0.5" step="0.02" data-path="modes.focus.dimOpacity">
+          </label>
+          <label class="check-row"><input type="checkbox" data-path="modes.focus.hideSticky"> Reduce sticky headers</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.focus.textOnly"> Text-only reader overlay</label>
+          <div class="swatches">
+            <label>Page <input type="color" data-path="modes.focus.background"></label>
+            <label>Text <input type="color" data-path="modes.focus.text"></label>
+            <label>Links <input type="color" data-path="modes.focus.link"></label>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-title">
+            <h2>Persistent Controls</h2>
+          </div>
+          <label class="check-row"><input type="checkbox" data-path="ui.floatingButton"> Show page quick button</label>
+          <label>Quick button side
+            <select data-path="ui.floatingPosition">
+              <option value="right">Right</option>
+              <option value="left">Left</option>
+            </select>
+          </label>
+        </article>
+
+        <article class="card" data-mode-card="simplify">
+          <div class="card-title">
+            <h2>Simplified Page</h2>
+            <input type="checkbox" data-path="modes.simplify.enabled" aria-label="Enable simplified page">
+          </div>
+          <label>Main content width <output data-output="modes.simplify.maxWidth" data-suffix="px"></output>
+            <input type="range" min="560" max="1180" step="20" data-path="modes.simplify.maxWidth">
+          </label>
+          <label class="check-row"><input type="checkbox" data-path="modes.simplify.hideNav"> Hide navigation and search</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.simplify.hideSidebars"> Hide sidebars and related content</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.simplify.hideForms"> Hide forms</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.simplify.hideComments"> Hide comments and sharing sections</label>
+          <div class="swatches compact-swatches">
+            <label>Page <input type="color" data-path="modes.simplify.background"></label>
+            <label>Text <input type="color" data-path="modes.simplify.text"></label>
+            <label>Link <input type="color" data-path="modes.simplify.link"></label>
+          </div>
+        </article>
+
+        <article class="card" data-mode-card="contrast">
+          <div class="card-title">
+            <h2>High Contrast</h2>
+            <input type="checkbox" data-path="modes.contrast.enabled" aria-label="Enable high contrast">
+          </div>
+          <label>Theme
+            <select data-path="modes.contrast.preset">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="yellow">Yellow on black</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <div class="swatches">
+            <label>Background <input type="color" data-path="modes.contrast.background"></label>
+            <label>Surface <input type="color" data-path="modes.contrast.surface"></label>
+            <label>Text <input type="color" data-path="modes.contrast.text"></label>
+            <label>Link <input type="color" data-path="modes.contrast.link"></label>
+            <label>Border <input type="color" data-path="modes.contrast.border"></label>
+          </div>
+          <label class="check-row"><input type="checkbox" data-path="modes.contrast.invertImages"> Invert images with page colors</label>
+        </article>
+
+        <article class="card" data-mode-card="text">
+          <div class="card-title">
+            <h2>Reading Text</h2>
+            <input type="checkbox" data-path="modes.text.enabled" aria-label="Enable reading text mode">
+          </div>
+          <label>Text size <output data-output="modes.text.scale" data-suffix="%"></output>
+            <input type="range" min="100" max="220" step="5" data-path="modes.text.scale">
+          </label>
+          <label>Line height <output data-output="modes.text.lineHeight"></output>
+            <input type="range" min="1.2" max="2.4" step="0.05" data-path="modes.text.lineHeight">
+          </label>
+          <label>Letter spacing <output data-output="modes.text.letterSpacing" data-suffix="em"></output>
+            <input type="range" min="0" max="0.16" step="0.01" data-path="modes.text.letterSpacing">
+          </label>
+          <label>Word spacing <output data-output="modes.text.wordSpacing" data-suffix="em"></output>
+            <input type="range" min="0" max="0.3" step="0.01" data-path="modes.text.wordSpacing">
+          </label>
+          <label>Paragraph spacing <output data-output="modes.text.paragraphSpacing" data-suffix="em"></output>
+            <input type="range" min="0" max="2" step="0.05" data-path="modes.text.paragraphSpacing">
+          </label>
+          <label>Font
+            <select data-path="modes.text.fontFamily">
+              <option value="system">System sans</option>
+              <option value="dyslexia">Readable sans</option>
+              <option value="serif">Serif</option>
+              <option value="mono">Mono</option>
+            </select>
+          </label>
+        </article>
+
+        <article class="card" data-mode-card="motion">
+          <div class="card-title">
+            <h2>Reduce Motion</h2>
+            <input type="checkbox" data-path="modes.motion.enabled" aria-label="Enable reduce motion">
+          </div>
+          <label class="check-row"><input type="checkbox" data-path="modes.motion.disableAnimations"> Disable animations and transitions</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.motion.reduceScrolling"> Force instant scrolling</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.motion.pauseMedia"> Pause autoplay video and audio</label>
+        </article>
+
+        <article class="card" data-mode-card="guide">
+          <div class="card-title">
+            <h2>Reading Guide</h2>
+            <input type="checkbox" data-path="modes.guide.enabled" aria-label="Enable reading guide">
+          </div>
+          <label>Band height <output data-output="modes.guide.height" data-suffix="px"></output>
+            <input type="range" min="36" max="180" step="4" data-path="modes.guide.height">
+          </label>
+          <label>Opacity <output data-output="modes.guide.opacity"></output>
+            <input type="range" min="0.08" max="0.5" step="0.02" data-path="modes.guide.opacity">
+          </label>
+          <label>Guide style
+            <select data-path="modes.guide.style">
+              <option value="band">Reading band</option>
+              <option value="ruler">Ruler box</option>
+              <option value="line">Focus line</option>
+            </select>
+          </label>
+          <label>Keyboard step <output data-output="modes.guide.keyboardStep" data-suffix="px"></output>
+            <input type="range" min="12" max="120" step="4" data-path="modes.guide.keyboardStep">
+          </label>
+          <label class="check-row"><input type="checkbox" data-path="modes.guide.followFocus"> Follow keyboard focus</label>
+          <label>Color <input type="color" data-path="modes.guide.color"></label>
+        </article>
+
+        <article class="card" data-mode-card="navigation">
+          <div class="card-title">
+            <h2>Navigation</h2>
+            <input type="checkbox" data-path="modes.navigation.enabled" aria-label="Enable navigation helpers">
+          </div>
+          <label class="check-row"><input type="checkbox" data-path="modes.navigation.focusRing"> Strong keyboard focus ring</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.navigation.underlineLinks"> Always underline links</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.navigation.largerTargets"> Larger form controls</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.navigation.showAltWarnings"> Outline images missing alt text</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.navigation.keyboardMap"> Keep keyboard map open</label>
+        </article>
+
+        <article class="card" data-mode-card="forms">
+          <div class="card-title">
+            <h2>Form Helper</h2>
+            <input type="checkbox" data-path="modes.forms.enabled" aria-label="Enable form helper">
+          </div>
+          <label class="check-row"><input type="checkbox" data-path="modes.forms.highlightRequired"> Highlight required fields</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.forms.flagUnlabeled"> Flag unlabeled controls</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.forms.flagInvalid"> Flag invalid fields</label>
+        </article>
+
+        <article class="card" data-mode-card="cognitive">
+          <div class="card-title">
+            <h2>Cognitive Support</h2>
+            <input type="checkbox" data-path="modes.cognitive.enabled" aria-label="Enable cognitive support">
+          </div>
+          <label>Reading width <output data-output="modes.cognitive.maxWidth" data-suffix="px"></output>
+            <input type="range" min="560" max="1020" step="20" data-path="modes.cognitive.maxWidth">
+          </label>
+          <label class="check-row"><input type="checkbox" data-path="modes.cognitive.hideExtras"> Hide extra page regions</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.cognitive.emphasizeHeadings"> Emphasize headings</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.cognitive.chunkText"> Add paragraph separators</label>
+        </article>
+
+        <article class="card" data-mode-card="filter">
+          <div class="card-title">
+            <h2>Color Filter</h2>
+            <input type="checkbox" data-path="modes.filter.enabled" aria-label="Enable color filter">
+          </div>
+          <label>Preset
+            <select data-path="modes.filter.preset">
+              <option value="none">Manual</option>
+              <option value="grayscale">Grayscale</option>
+              <option value="warm">Warm</option>
+              <option value="cool">Cool</option>
+            </select>
+          </label>
+          <label>Grayscale <output data-output="modes.filter.grayscale" data-suffix="%"></output>
+            <input type="range" min="0" max="100" step="5" data-path="modes.filter.grayscale">
+          </label>
+          <label>Saturation <output data-output="modes.filter.saturation" data-suffix="%"></output>
+            <input type="range" min="40" max="180" step="5" data-path="modes.filter.saturation">
+          </label>
+          <label>Brightness <output data-output="modes.filter.brightness" data-suffix="%"></output>
+            <input type="range" min="70" max="130" step="5" data-path="modes.filter.brightness">
+          </label>
+          <label>Contrast <output data-output="modes.filter.contrast" data-suffix="%"></output>
+            <input type="range" min="70" max="150" step="5" data-path="modes.filter.contrast">
+          </label>
+          <label>Sepia <output data-output="modes.filter.sepia" data-suffix="%"></output>
+            <input type="range" min="0" max="40" step="2" data-path="modes.filter.sepia">
+          </label>
+        </article>
+
+        <article class="card">
+          <div class="card-title">
+            <h2>Read Aloud</h2>
+          </div>
+          <label>Voice
+            <select data-path="modes.speech.voiceURI" data-voice-select>
+              <option value="auto">Auto switch by detected language</option>
+            </select>
+          </label>
+          <label>Speech rate <output data-output="modes.speech.rate"></output>
+            <input type="range" min="0.6" max="1.8" step="0.1" data-path="modes.speech.rate">
+          </label>
+          <label>Pitch <output data-output="modes.speech.pitch"></output>
+            <input type="range" min="0.7" max="1.4" step="0.1" data-path="modes.speech.pitch">
+          </label>
+          <label>Volume <output data-output="modes.speech.volume"></output>
+            <input type="range" min="0.2" max="1" step="0.1" data-path="modes.speech.volume">
+          </label>
+          <label class="check-row"><input type="checkbox" data-path="modes.speech.naturalPauses"> Natural pauses between sections</label>
+          <label class="check-row"><input type="checkbox" data-path="modes.speech.highlight"> Highlight current speech</label>
+          <label>Pause strength <output data-output="modes.speech.pauseScale"></output>
+            <input type="range" min="0.4" max="1.8" step="0.1" data-path="modes.speech.pauseScale">
+          </label>
+        </article>
+
+        <article class="card">
+          <div class="card-title">
+            <h2>Local Summary</h2>
+          </div>
+          <label>Engine
+            <select data-path="summary.engine">
+              <option value="auto">Browser local AI, then offline fallback</option>
+              <option value="browser">Browser local AI only</option>
+              <option value="extractive">Offline extraction only</option>
+            </select>
+          </label>
+          <label>Length
+            <select data-path="summary.length">
+              <option value="short">Short</option>
+              <option value="medium">Medium</option>
+              <option value="detailed">Detailed</option>
+            </select>
+          </label>
+          <label>Format
+            <select data-path="summary.format">
+              <option value="bullets">Bullet points</option>
+              <option value="paragraph">Paragraph</option>
+              <option value="actions">Key actions</option>
+            </select>
+          </label>
+          <label class="check-row"><input type="checkbox" data-path="summary.plainLanguage"> Plain language</label>
+          <label class="check-row"><input type="checkbox" data-path="summary.cache"> Cache summaries locally</label>
+        </article>
+      </section>
+
+      <section class="card utility-card">
+        <div>
+          <h2>Export or Import Settings</h2>
+          <p>Use this to move global settings, site settings, and custom profiles between browsers.</p>
+        </div>
+        <textarea id="settingsJson" spellcheck="false" aria-label="Settings JSON"></textarea>
+        <div class="actions">
+          <button id="exportSettings" type="button">Export</button>
+          <button id="importSettings" type="button">Import</button>
+          <button id="clearSiteSettings" type="button">Clear site settings</button>
+          <button id="clearSummaryCache" type="button">Clear summary cache</button>
+          <button id="undoGlobalSettings" type="button">Undo global change</button>
+          <button id="reset" class="danger" type="button">Reset</button>
+          <span id="status" role="status"></span>
+        </div>
+      </section>
+    </main>
+
+    <script src="shared/settings.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

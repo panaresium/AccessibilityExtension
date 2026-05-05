@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>AccessiView Form Fixture</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+
+      main {
+        max-width: 720px;
+        margin: 24px auto;
+      }
+
+      .tiny-target {
+        width: 14px;
+        height: 14px;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Form Fixture</h1>
+      <form>
+        <label for="name">Name</label>
+        <input id="name" required>
+        <input required>
+        <input type="email" value="not-an-email">
+        <button class="tiny-target" type="button">x</button>
+        <button type="submit">Submit</button>
+      </form>
+    </main>
+  </body>
+</html>

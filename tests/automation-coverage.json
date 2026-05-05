@@ -1,0 +1,627 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Automation guidance for AccessiView regression, accessibility, and live-site exploratory testing.",
+  "safetyRules": [
+    "Prefer local fixtures for blocking regression checks.",
+    "Use public pages that do not require login for live exploratory checks.",
+    "Do not submit forms, create accounts, purchase items, post content, or change user data during automation.",
+    "Do not collect personal data, cookies, session tokens, page text dumps, or screenshots containing private information.",
+    "Treat live-site results as advisory because website layouts and anti-automation behavior can change at any time.",
+    "Keep browser extension permissions and content security policy unchanged unless a reviewed feature requires it."
+  ],
+  "featureTestCases": [
+    {
+      "id": "manifest-security",
+      "priority": "critical",
+      "area": "extension-security",
+      "userGroups": ["all users"],
+      "recommendedTarget": "local",
+      "steps": [
+        "Load manifest.json.",
+        "Verify Manifest V3 is used.",
+        "Verify the expected service worker and content script ordering.",
+        "Verify permissions remain in the reviewed allowlist.",
+        "Verify extension CSP does not allow unsafe inline scripts or eval."
+      ],
+      "expectedSignals": ["manifestResult.manifestVersion", "manifestResult.unexpectedPermissions", "manifestResult.unsafeCsp"]
+    },
+    {
+      "id": "simplify-main-content",
+      "priority": "critical",
+      "area": "reader-simplification",
+      "userGroups": ["screen reader users", "users with cognitive load sensitivity", "low-vision users"],
+      "recommendedTarget": "local-or-news",
+      "steps": [
+        "Enable Simplified Page mode.",
+        "Open an article-style page.",
+        "Verify the main article region is preserved.",
+        "Verify navigation, sidebars, comments, and repeated clutter are reduced without hiding the main content."
+      ],
+      "expectedSignals": ["av-mode-simplify", "data-av-simplify-main"]
+    },
+    {
+      "id": "focus-reader-overlay",
+      "priority": "critical",
+      "area": "focus-mode",
+      "userGroups": ["users with ADHD", "users with reading difficulty", "low-vision users"],
+      "recommendedTarget": "local-or-article",
+      "steps": [
+        "Enable Focus mode with the text-only reader overlay.",
+        "Open a content-heavy page.",
+        "Verify the overlay is readable and keyboard reachable.",
+        "Verify useful inline links remain visible, clickable, and keyboard focusable.",
+        "Verify the exit control is visible, named, and clickable."
+      ],
+      "expectedSignals": ["accessiview-reader-host", "focusReaderActive", "readerBlocks", "focusReaderResult.linkHref"]
+    },
+    {
+      "id": "contrast-and-text",
+      "priority": "high",
+      "area": "visual-accessibility",
+      "userGroups": ["low-vision users", "color-blind users", "users with dyslexia"],
+      "recommendedTarget": "local-or-shopping",
+      "steps": [
+        "Enable high contrast mode.",
+        "Enable reading text adjustments.",
+        "Verify text, links, form controls, and page surfaces remain visible.",
+        "Verify images are not inverted unless the setting is enabled."
+      ],
+      "expectedSignals": ["av-mode-contrast", "av-mode-text", "data-av-contrast-color"]
+    },
+    {
+      "id": "reduce-motion",
+      "priority": "high",
+      "area": "motion-safety",
+      "userGroups": ["users sensitive to motion", "vestibular disorder users", "photosensitive users"],
+      "recommendedTarget": "local-or-media",
+      "steps": [
+        "Enable Reduce Motion mode.",
+        "Open a page with smooth scrolling, animation, or autoplay media.",
+        "Verify animations and transitions are reduced.",
+        "Verify smooth scrolling is converted to instant scrolling.",
+        "Verify autoplay media is paused when browser policies allow it."
+      ],
+      "expectedSignals": ["av-mode-motion", "av-disable-animations", "av-reduce-scroll"]
+    },
+    {
+      "id": "reading-guide-keyboard",
+      "priority": "high",
+      "area": "reading-guide",
+      "userGroups": ["keyboard-only users", "low-vision users", "users with dyslexia"],
+      "recommendedTarget": "local",
+      "steps": [
+        "Enable the reading guide.",
+        "Move pointer and keyboard focus through the page.",
+        "Verify the guide follows focus when configured.",
+        "Verify guide movement does not steal focus or block controls."
+      ],
+      "expectedSignals": ["accessiview-reading-guide", "av-mode-guide"]
+    },
+    {
+      "id": "navigation-helpers",
+      "priority": "high",
+      "area": "keyboard-navigation",
+      "userGroups": ["keyboard-only users", "motor-impaired users", "screen reader users"],
+      "recommendedTarget": "local-or-web-app",
+      "steps": [
+        "Enable Navigation Helpers.",
+        "Tab through links, buttons, inputs, and custom controls.",
+        "Verify focus rings are visible.",
+        "Verify keyboard map can open and close.",
+        "Verify larger target mode does not break layout."
+      ],
+      "expectedSignals": ["av-mode-navigation", "accessiview-keyboard-map-host"]
+    },
+    {
+      "id": "missing-alt-warnings",
+      "priority": "medium",
+      "area": "image-accessibility",
+      "userGroups": ["screen reader users", "content authors"],
+      "recommendedTarget": "local-or-image-heavy",
+      "steps": [
+        "Enable missing-alt warnings.",
+        "Open a page with informative images.",
+        "Verify images without alt text are outlined.",
+        "Verify decorative images with empty alt text are not flagged."
+      ],
+      "expectedSignals": ["data-av-missing-alt"]
+    },
+    {
+      "id": "form-helper",
+      "priority": "high",
+      "area": "forms",
+      "userGroups": ["screen reader users", "keyboard-only users", "users with cognitive difficulty"],
+      "recommendedTarget": "local",
+      "steps": [
+        "Enable Form Helper mode.",
+        "Open a fixture with required, invalid, and unlabeled controls.",
+        "Verify required fields, invalid fields, and unlabeled controls are marked.",
+        "Verify no form is submitted during automation."
+      ],
+      "expectedSignals": ["data-av-form-required", "data-av-form-invalid", "data-av-form-unlabeled"]
+    },
+    {
+      "id": "cognitive-support",
+      "priority": "high",
+      "area": "cognitive-support",
+      "userGroups": ["users with cognitive load sensitivity", "users with reading difficulty"],
+      "recommendedTarget": "local-or-news",
+      "steps": [
+        "Enable Cognitive Support mode.",
+        "Open a long-form page.",
+        "Verify headings are emphasized.",
+        "Verify long paragraphs are chunked.",
+        "Verify main content remains readable."
+      ],
+      "expectedSignals": ["av-mode-cognitive", "data-av-cognitive-paragraph"]
+    },
+    {
+      "id": "local-summary",
+      "priority": "high",
+      "area": "summarization",
+      "userGroups": ["users with reading difficulty", "users with cognitive load sensitivity", "screen reader users"],
+      "recommendedTarget": "local",
+      "steps": [
+        "Request a local summary for a content page.",
+        "Use the offline extractive engine in CI-style automation.",
+        "Verify the summary returns a success response.",
+        "Verify sensitive-field pages are not summarized."
+      ],
+      "expectedSignals": ["ACCESSIVIEW_SUMMARIZE_PAGE", "summaryResult.ok", "summaryResult.method"]
+    },
+    {
+      "id": "read-aloud-controls",
+      "priority": "medium",
+      "area": "speech",
+      "userGroups": ["screen reader users", "users with dyslexia", "users with reading fatigue"],
+      "recommendedTarget": "local-or-article",
+      "steps": [
+        "Start read aloud on detected page text.",
+        "Verify pause, resume, previous, next, and stop controls respond.",
+        "Verify current-speech highlighting can be enabled.",
+        "Avoid asserting a specific installed voice because browser voices vary by machine."
+      ],
+      "expectedSignals": ["ACCESSIVIEW_READ", "ACCESSIVIEW_GET_SPEECH_STATUS"]
+    },
+    {
+      "id": "site-settings-and-picker",
+      "priority": "medium",
+      "area": "per-site-settings",
+      "userGroups": ["all users"],
+      "recommendedTarget": "local-or-news",
+      "steps": [
+        "Enable separate settings for the current website.",
+        "Use the manual main-content picker on an article region.",
+        "Reload the page.",
+        "Verify the saved selector is applied before generic reader detection.",
+        "Clear the pick and verify the site override is removed."
+      ],
+      "expectedSignals": ["ACCESSIVIEW_START_CONTENT_PICKER", "usingSiteSettings", "siteRule"]
+    },
+    {
+      "id": "shadow-dom-and-iframes",
+      "priority": "medium",
+      "area": "embedded-content",
+      "userGroups": ["all users"],
+      "recommendedTarget": "local",
+      "steps": [
+        "Open a fixture with shadow DOM and iframe content.",
+        "Enable contrast, motion, navigation, form, and alt-warning modes.",
+        "Verify supported open shadow roots and accessible frames receive styles or markers.",
+        "Record browser-restricted frames as limitations instead of failures."
+      ],
+      "expectedSignals": ["shadowRoot", "iframe", "all_frames"]
+    },
+    {
+      "id": "popup-options-regression",
+      "priority": "critical",
+      "area": "extension-ui",
+      "userGroups": ["all users"],
+      "recommendedTarget": "local",
+      "steps": [
+        "Open popup.html and options.html.",
+        "Verify presets, undo controls, profile controls, summary controls, and side-panel controls exist.",
+        "Verify status text uses live-region semantics.",
+        "Verify controls can be reached by keyboard."
+      ],
+      "expectedSignals": ["popupResult.presets", "optionsResult.hasSummaryEngine", "role=status"]
+    }
+  ],
+  "websiteCategories": [
+    {
+      "id": "news",
+      "name": "News and article sites",
+      "whyTest": "Article extraction, clutter reduction, sticky regions, ads, headings, summaries, and reading modes.",
+      "recommendedCases": ["simplify-main-content", "focus-reader-overlay", "cognitive-support", "local-summary", "missing-alt-warnings"],
+      "websites": [
+        { "id": "bbc-news", "name": "BBC News", "url": "https://www.bbc.com/news" },
+        { "id": "cnn", "name": "CNN", "url": "https://www.cnn.com/" },
+        { "id": "reuters", "name": "Reuters", "url": "https://www.reuters.com/" },
+        { "id": "ap-news", "name": "AP News", "url": "https://apnews.com/" },
+        { "id": "npr", "name": "NPR", "url": "https://www.npr.org/" },
+        { "id": "the-guardian", "name": "The Guardian", "url": "https://www.theguardian.com/international" },
+        { "id": "nytimes", "name": "The New York Times", "url": "https://www.nytimes.com/" },
+        { "id": "washington-post", "name": "The Washington Post", "url": "https://www.washingtonpost.com/" },
+        { "id": "abc-news", "name": "ABC News", "url": "https://abcnews.go.com/" },
+        { "id": "nbc-news", "name": "NBC News", "url": "https://www.nbcnews.com/" },
+        { "id": "cbs-news", "name": "CBS News", "url": "https://www.cbsnews.com/" },
+        { "id": "fox-news", "name": "Fox News", "url": "https://www.foxnews.com/" },
+        { "id": "al-jazeera", "name": "Al Jazeera", "url": "https://www.aljazeera.com/" },
+        { "id": "dw", "name": "Deutsche Welle", "url": "https://www.dw.com/" },
+        { "id": "france24", "name": "France 24", "url": "https://www.france24.com/en/" },
+        { "id": "japantimes", "name": "The Japan Times", "url": "https://www.japantimes.co.jp/" },
+        { "id": "bangkok-post", "name": "Bangkok Post", "url": "https://www.bangkokpost.com/" },
+        { "id": "thaiware", "name": "Thaiware", "url": "https://www.thaiware.com/" },
+        { "id": "msn", "name": "MSN", "url": "https://www.msn.com/" },
+        { "id": "google-news", "name": "Google News", "url": "https://news.google.com/" }
+      ]
+    },
+    {
+      "id": "video-media",
+      "name": "Video, audio, and rich media sites",
+      "whyTest": "Reduce motion, autoplay handling, captions, media controls, overlays, focus order, and image-heavy layouts.",
+      "recommendedCases": ["reduce-motion", "navigation-helpers", "contrast-and-text", "missing-alt-warnings"],
+      "websites": [
+        { "id": "youtube", "name": "YouTube", "url": "https://www.youtube.com/" },
+        { "id": "vimeo", "name": "Vimeo", "url": "https://vimeo.com/" },
+        { "id": "twitch", "name": "Twitch", "url": "https://www.twitch.tv/" },
+        { "id": "netflix", "name": "Netflix", "url": "https://www.netflix.com/" },
+        { "id": "hulu", "name": "Hulu", "url": "https://www.hulu.com/" },
+        { "id": "disney-plus", "name": "Disney+", "url": "https://www.disneyplus.com/" },
+        { "id": "prime-video", "name": "Prime Video", "url": "https://www.primevideo.com/" },
+        { "id": "spotify", "name": "Spotify", "url": "https://open.spotify.com/" },
+        { "id": "soundcloud", "name": "SoundCloud", "url": "https://soundcloud.com/" },
+        { "id": "podcasts-apple", "name": "Apple Podcasts", "url": "https://podcasts.apple.com/" },
+        { "id": "ted", "name": "TED", "url": "https://www.ted.com/talks" },
+        { "id": "dailymotion", "name": "Dailymotion", "url": "https://www.dailymotion.com/" },
+        { "id": "peacock", "name": "Peacock", "url": "https://www.peacocktv.com/" },
+        { "id": "paramount-plus", "name": "Paramount+", "url": "https://www.paramountplus.com/" },
+        { "id": "max", "name": "Max", "url": "https://www.max.com/" },
+        { "id": "pbs", "name": "PBS", "url": "https://www.pbs.org/video/" },
+        { "id": "nasa-video", "name": "NASA Video", "url": "https://www.nasa.gov/multimedia/" },
+        { "id": "coursera-videos", "name": "Coursera", "url": "https://www.coursera.org/" },
+        { "id": "khan-academy", "name": "Khan Academy", "url": "https://www.khanacademy.org/" },
+        { "id": "archive-video", "name": "Internet Archive Video", "url": "https://archive.org/details/movies" }
+      ]
+    },
+    {
+      "id": "shopping-commerce",
+      "name": "Shopping, marketplace, and booking sites",
+      "whyTest": "Dense cards, filters, product images, forms, dialogs, ratings, target size, and keyboard navigation.",
+      "recommendedCases": ["contrast-and-text", "navigation-helpers", "form-helper", "missing-alt-warnings", "reading-guide-keyboard"],
+      "websites": [
+        { "id": "amazon", "name": "Amazon", "url": "https://www.amazon.com/" },
+        { "id": "ebay", "name": "eBay", "url": "https://www.ebay.com/" },
+        { "id": "walmart", "name": "Walmart", "url": "https://www.walmart.com/" },
+        { "id": "target", "name": "Target", "url": "https://www.target.com/" },
+        { "id": "bestbuy", "name": "Best Buy", "url": "https://www.bestbuy.com/" },
+        { "id": "etsy", "name": "Etsy", "url": "https://www.etsy.com/" },
+        { "id": "shopify", "name": "Shopify", "url": "https://www.shopify.com/" },
+        { "id": "costco", "name": "Costco", "url": "https://www.costco.com/" },
+        { "id": "homedepot", "name": "The Home Depot", "url": "https://www.homedepot.com/" },
+        { "id": "lowes", "name": "Lowe's", "url": "https://www.lowes.com/" },
+        { "id": "ikea", "name": "IKEA", "url": "https://www.ikea.com/" },
+        { "id": "booking", "name": "Booking.com", "url": "https://www.booking.com/" },
+        { "id": "airbnb", "name": "Airbnb", "url": "https://www.airbnb.com/" },
+        { "id": "expedia", "name": "Expedia", "url": "https://www.expedia.com/" },
+        { "id": "tripadvisor", "name": "Tripadvisor", "url": "https://www.tripadvisor.com/" },
+        { "id": "doordash", "name": "DoorDash", "url": "https://www.doordash.com/" },
+        { "id": "ubereats", "name": "Uber Eats", "url": "https://www.ubereats.com/" },
+        { "id": "sephora", "name": "Sephora", "url": "https://www.sephora.com/" },
+        { "id": "nike", "name": "Nike", "url": "https://www.nike.com/" },
+        { "id": "zara", "name": "Zara", "url": "https://www.zara.com/" }
+      ]
+    },
+    {
+      "id": "social-community",
+      "name": "Social, community, and forum sites",
+      "whyTest": "Infinite feeds, dialogs, comments, nested content, focus handling, dynamic updates, and visual overload.",
+      "recommendedCases": ["cognitive-support", "reduce-motion", "navigation-helpers", "contrast-and-text", "reading-guide-keyboard"],
+      "websites": [
+        { "id": "reddit", "name": "Reddit", "url": "https://www.reddit.com/" },
+        { "id": "x", "name": "X", "url": "https://x.com/" },
+        { "id": "facebook", "name": "Facebook", "url": "https://www.facebook.com/" },
+        { "id": "instagram", "name": "Instagram", "url": "https://www.instagram.com/" },
+        { "id": "linkedin", "name": "LinkedIn", "url": "https://www.linkedin.com/" },
+        { "id": "pinterest", "name": "Pinterest", "url": "https://www.pinterest.com/" },
+        { "id": "tumblr", "name": "Tumblr", "url": "https://www.tumblr.com/" },
+        { "id": "threads", "name": "Threads", "url": "https://www.threads.net/" },
+        { "id": "mastodon", "name": "Mastodon", "url": "https://mastodon.social/" },
+        { "id": "bluesky", "name": "Bluesky", "url": "https://bsky.app/" },
+        { "id": "discord", "name": "Discord", "url": "https://discord.com/" },
+        { "id": "slack", "name": "Slack", "url": "https://slack.com/" },
+        { "id": "stack-overflow", "name": "Stack Overflow", "url": "https://stackoverflow.com/questions" },
+        { "id": "quora", "name": "Quora", "url": "https://www.quora.com/" },
+        { "id": "medium", "name": "Medium", "url": "https://medium.com/" },
+        { "id": "substack", "name": "Substack", "url": "https://substack.com/" },
+        { "id": "producthunt", "name": "Product Hunt", "url": "https://www.producthunt.com/" },
+        { "id": "hacker-news", "name": "Hacker News", "url": "https://news.ycombinator.com/" },
+        { "id": "nextdoor", "name": "Nextdoor", "url": "https://nextdoor.com/" },
+        { "id": "imdb-community", "name": "IMDb", "url": "https://www.imdb.com/" }
+      ]
+    },
+    {
+      "id": "documentation-learning",
+      "name": "Documentation, learning, and reference sites",
+      "whyTest": "Long structured text, tables, code blocks, sidebars, headings, search, and summary quality.",
+      "recommendedCases": ["simplify-main-content", "focus-reader-overlay", "local-summary", "reading-guide-keyboard", "navigation-helpers"],
+      "websites": [
+        { "id": "wikipedia", "name": "Wikipedia", "url": "https://www.wikipedia.org/" },
+        { "id": "mdn", "name": "MDN Web Docs", "url": "https://developer.mozilla.org/" },
+        { "id": "microsoft-learn", "name": "Microsoft Learn", "url": "https://learn.microsoft.com/" },
+        { "id": "web-dev", "name": "web.dev", "url": "https://web.dev/" },
+        { "id": "w3c", "name": "W3C", "url": "https://www.w3.org/" },
+        { "id": "python-docs", "name": "Python Docs", "url": "https://docs.python.org/3/" },
+        { "id": "node-docs", "name": "Node.js Docs", "url": "https://nodejs.org/en/docs" },
+        { "id": "react-docs", "name": "React Docs", "url": "https://react.dev/" },
+        { "id": "typescript-docs", "name": "TypeScript Docs", "url": "https://www.typescriptlang.org/docs/" },
+        { "id": "rust-docs", "name": "Rust Docs", "url": "https://doc.rust-lang.org/book/" },
+        { "id": "aws-docs", "name": "AWS Docs", "url": "https://docs.aws.amazon.com/" },
+        { "id": "cloudflare-docs", "name": "Cloudflare Docs", "url": "https://developers.cloudflare.com/" },
+        { "id": "kubernetes-docs", "name": "Kubernetes Docs", "url": "https://kubernetes.io/docs/" },
+        { "id": "docker-docs", "name": "Docker Docs", "url": "https://docs.docker.com/" },
+        { "id": "github-docs", "name": "GitHub Docs", "url": "https://docs.github.com/" },
+        { "id": "coursera", "name": "Coursera", "url": "https://www.coursera.org/" },
+        { "id": "edx", "name": "edX", "url": "https://www.edx.org/" },
+        { "id": "mit-ocw", "name": "MIT OpenCourseWare", "url": "https://ocw.mit.edu/" },
+        { "id": "britannica", "name": "Britannica", "url": "https://www.britannica.com/" },
+        { "id": "wikihow", "name": "wikiHow", "url": "https://www.wikihow.com/" }
+      ]
+    },
+    {
+      "id": "web-app-productivity",
+      "name": "Search, maps, productivity, and app-style pages",
+      "whyTest": "Complex app shells, forms, toolbars, keyboard focus, dialogs, canvas-like surfaces, and dynamic updates.",
+      "recommendedCases": ["navigation-helpers", "form-helper", "contrast-and-text", "reduce-motion", "popup-options-regression"],
+      "websites": [
+        { "id": "google-search", "name": "Google Search", "url": "https://www.google.com/search?q=accessibility" },
+        { "id": "bing-search", "name": "Bing Search", "url": "https://www.bing.com/search?q=accessibility" },
+        { "id": "duckduckgo", "name": "DuckDuckGo", "url": "https://duckduckgo.com/?q=accessibility" },
+        { "id": "google-maps", "name": "Google Maps", "url": "https://www.google.com/maps" },
+        { "id": "apple-maps", "name": "Apple Maps", "url": "https://maps.apple.com/" },
+        { "id": "gmail", "name": "Gmail", "url": "https://mail.google.com/" },
+        { "id": "outlook", "name": "Outlook", "url": "https://outlook.live.com/" },
+        { "id": "google-docs", "name": "Google Docs", "url": "https://docs.google.com/" },
+        { "id": "microsoft-365", "name": "Microsoft 365", "url": "https://www.microsoft365.com/" },
+        { "id": "notion", "name": "Notion", "url": "https://www.notion.so/" },
+        { "id": "trello", "name": "Trello", "url": "https://trello.com/" },
+        { "id": "asana", "name": "Asana", "url": "https://asana.com/" },
+        { "id": "jira", "name": "Jira", "url": "https://www.atlassian.com/software/jira" },
+        { "id": "figma", "name": "Figma", "url": "https://www.figma.com/" },
+        { "id": "canva", "name": "Canva", "url": "https://www.canva.com/" },
+        { "id": "dropbox", "name": "Dropbox", "url": "https://www.dropbox.com/" },
+        { "id": "box", "name": "Box", "url": "https://www.box.com/" },
+        { "id": "github", "name": "GitHub", "url": "https://github.com/" },
+        { "id": "gitlab", "name": "GitLab", "url": "https://gitlab.com/" },
+        { "id": "zoom", "name": "Zoom", "url": "https://zoom.us/" }
+      ]
+    }
+  ],
+  "websiteCatalog": [
+    {
+      "id": "wikipedia",
+      "name": "Wikipedia",
+      "url": "https://www.wikipedia.org/",
+      "category": "reference",
+      "whyTest": "Long articles, headings, tables, links, images, language switching, and stable public content.",
+      "recommendedCases": ["simplify-main-content", "focus-reader-overlay", "cognitive-support", "local-summary", "site-settings-and-picker"],
+      "automationNotes": "Prefer article pages over the home page."
+    },
+    {
+      "id": "youtube",
+      "name": "YouTube",
+      "url": "https://www.youtube.com/",
+      "category": "video",
+      "whyTest": "Media-heavy layout, dynamic content, keyboard focus, autoplay behavior, captions, and motion safety.",
+      "recommendedCases": ["reduce-motion", "navigation-helpers", "contrast-and-text"],
+      "automationNotes": "Do not sign in or interact with recommendations beyond navigation checks."
+    },
+    {
+      "id": "google-search",
+      "name": "Google Search",
+      "url": "https://www.google.com/search?q=accessibility",
+      "category": "search",
+      "whyTest": "Dense links, search controls, dynamic result regions, keyboard navigation, and focus visibility.",
+      "recommendedCases": ["navigation-helpers", "contrast-and-text", "reading-guide-keyboard"],
+      "automationNotes": "Use a harmless query and avoid account-specific features."
+    },
+    {
+      "id": "bing-search",
+      "name": "Bing Search",
+      "url": "https://www.bing.com/search?q=accessibility",
+      "category": "search",
+      "whyTest": "Search results with cards, side regions, images, and dynamic layout changes.",
+      "recommendedCases": ["navigation-helpers", "simplify-main-content", "contrast-and-text"],
+      "automationNotes": "Use public search result pages only."
+    },
+    {
+      "id": "amazon",
+      "name": "Amazon",
+      "url": "https://www.amazon.com/",
+      "category": "shopping",
+      "whyTest": "Complex navigation, product cards, forms, ratings, images, and sticky regions.",
+      "recommendedCases": ["contrast-and-text", "navigation-helpers", "missing-alt-warnings", "reading-guide-keyboard"],
+      "automationNotes": "Do not sign in, add items to cart, or purchase."
+    },
+    {
+      "id": "ebay",
+      "name": "eBay",
+      "url": "https://www.ebay.com/",
+      "category": "shopping",
+      "whyTest": "Search forms, product listings, filters, image grids, and repeated controls.",
+      "recommendedCases": ["form-helper", "navigation-helpers", "contrast-and-text"],
+      "automationNotes": "Do not bid, buy, sign in, or save listings."
+    },
+    {
+      "id": "reddit",
+      "name": "Reddit",
+      "url": "https://www.reddit.com/",
+      "category": "social",
+      "whyTest": "Infinite feeds, nested comments, dynamic regions, overlays, and keyboard focus behavior.",
+      "recommendedCases": ["cognitive-support", "reduce-motion", "navigation-helpers", "reading-guide-keyboard"],
+      "automationNotes": "Use public pages and do not post, vote, or log in."
+    },
+    {
+      "id": "x",
+      "name": "X",
+      "url": "https://x.com/",
+      "category": "social",
+      "whyTest": "Highly dynamic feed UI, dialogs, keyboard navigation, images, and motion-heavy interactions.",
+      "recommendedCases": ["reduce-motion", "navigation-helpers", "contrast-and-text"],
+      "automationNotes": "Many flows require login; keep checks exploratory and non-mutating."
+    },
+    {
+      "id": "facebook",
+      "name": "Facebook",
+      "url": "https://www.facebook.com/",
+      "category": "social",
+      "whyTest": "Complex app shell, dialogs, forms, and dynamic content regions.",
+      "recommendedCases": ["navigation-helpers", "form-helper", "contrast-and-text"],
+      "automationNotes": "Do not sign in or interact with private content."
+    },
+    {
+      "id": "instagram",
+      "name": "Instagram",
+      "url": "https://www.instagram.com/",
+      "category": "social-media",
+      "whyTest": "Image-first layouts, dialogs, focus handling, and login-gated public content.",
+      "recommendedCases": ["missing-alt-warnings", "navigation-helpers", "contrast-and-text"],
+      "automationNotes": "Do not sign in or interact with accounts."
+    },
+    {
+      "id": "linkedin",
+      "name": "LinkedIn",
+      "url": "https://www.linkedin.com/",
+      "category": "professional",
+      "whyTest": "Forms, dialogs, navigation, job listings, and dense professional content.",
+      "recommendedCases": ["form-helper", "navigation-helpers", "contrast-and-text"],
+      "automationNotes": "Avoid authenticated flows and profile interactions."
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "url": "https://github.com/",
+      "category": "developer",
+      "whyTest": "Code views, issue forms, markdown content, navigation landmarks, and tables.",
+      "recommendedCases": ["navigation-helpers", "contrast-and-text", "reading-guide-keyboard", "form-helper"],
+      "automationNotes": "Use public repositories and do not submit issues or comments."
+    },
+    {
+      "id": "stackoverflow",
+      "name": "Stack Overflow",
+      "url": "https://stackoverflow.com/questions",
+      "category": "developer",
+      "whyTest": "Question pages, code blocks, voting controls, forms, and dense text.",
+      "recommendedCases": ["simplify-main-content", "focus-reader-overlay", "local-summary", "navigation-helpers"],
+      "automationNotes": "Use public question pages and do not vote or post."
+    },
+    {
+      "id": "medium",
+      "name": "Medium",
+      "url": "https://medium.com/",
+      "category": "publishing",
+      "whyTest": "Article pages, overlays, sticky headers, and long-form reading.",
+      "recommendedCases": ["simplify-main-content", "focus-reader-overlay", "cognitive-support", "local-summary"],
+      "automationNotes": "Prefer public articles; paywalls or sign-in prompts may appear."
+    },
+    {
+      "id": "nytimes",
+      "name": "The New York Times",
+      "url": "https://www.nytimes.com/",
+      "category": "news",
+      "whyTest": "News article layouts, ads, paywall prompts, images, and sticky navigation.",
+      "recommendedCases": ["simplify-main-content", "focus-reader-overlay", "cognitive-support", "missing-alt-warnings"],
+      "automationNotes": "Treat paywall and consent overlays as site conditions, not extension failures."
+    },
+    {
+      "id": "bbc",
+      "name": "BBC",
+      "url": "https://www.bbc.com/news",
+      "category": "news",
+      "whyTest": "Article pages, navigation regions, media embeds, captions, and international content.",
+      "recommendedCases": ["simplify-main-content", "local-summary", "reduce-motion", "contrast-and-text"],
+      "automationNotes": "Use public news pages."
+    },
+    {
+      "id": "cnn",
+      "name": "CNN",
+      "url": "https://www.cnn.com/",
+      "category": "news",
+      "whyTest": "Dynamic article pages, media, ads, sticky regions, and related-content blocks.",
+      "recommendedCases": ["simplify-main-content", "reduce-motion", "cognitive-support", "missing-alt-warnings"],
+      "automationNotes": "Consent prompts and autoplay behavior may vary by region."
+    },
+    {
+      "id": "msn",
+      "name": "MSN",
+      "url": "https://www.msn.com/",
+      "category": "news-portal",
+      "whyTest": "Built-in AccessiView rule pack, portal layout, article cards, ads, and recommendations.",
+      "recommendedCases": ["simplify-main-content", "site-settings-and-picker", "cognitive-support"],
+      "automationNotes": "Useful for regression checks around existing site rules."
+    },
+    {
+      "id": "thaiware",
+      "name": "Thaiware",
+      "url": "https://www.thaiware.com/",
+      "category": "regional-content",
+      "whyTest": "Built-in AccessiView rule pack, Thai language content, article layouts, and ads.",
+      "recommendedCases": ["simplify-main-content", "site-settings-and-picker", "local-summary"],
+      "automationNotes": "Useful for bilingual and regional layout checks."
+    },
+    {
+      "id": "gmail",
+      "name": "Gmail",
+      "url": "https://mail.google.com/",
+      "category": "web-app",
+      "whyTest": "Complex app shell, keyboard shortcuts, forms, dialogs, and high interaction density.",
+      "recommendedCases": ["navigation-helpers", "contrast-and-text", "reduce-motion"],
+      "automationNotes": "Do not use private accounts in automation; prefer a dedicated test account only if approved."
+    },
+    {
+      "id": "google-docs",
+      "name": "Google Docs",
+      "url": "https://docs.google.com/",
+      "category": "productivity",
+      "whyTest": "Canvas-like editing surface, toolbars, dialogs, focus behavior, and keyboard shortcuts.",
+      "recommendedCases": ["navigation-helpers", "contrast-and-text", "reduce-motion"],
+      "automationNotes": "Requires a controlled test account and test document for meaningful automation."
+    },
+    {
+      "id": "google-maps",
+      "name": "Google Maps",
+      "url": "https://www.google.com/maps",
+      "category": "maps",
+      "whyTest": "Canvas/map content, panels, search forms, dynamic controls, and keyboard navigation.",
+      "recommendedCases": ["navigation-helpers", "form-helper", "contrast-and-text"],
+      "automationNotes": "Map canvas limitations should be recorded as known constraints."
+    },
+    {
+      "id": "netflix",
+      "name": "Netflix",
+      "url": "https://www.netflix.com/",
+      "category": "streaming",
+      "whyTest": "Media-heavy UI, motion, dialogs, keyboard focus, and protected video surfaces.",
+      "recommendedCases": ["reduce-motion", "navigation-helpers", "contrast-and-text"],
+      "automationNotes": "Authenticated DRM/video playback should be manual or use a dedicated test account only."
+    },
+    {
+      "id": "microsoft-learn",
+      "name": "Microsoft Learn",
+      "url": "https://learn.microsoft.com/",
+      "category": "documentation",
+      "whyTest": "Long technical documents, navigation trees, code blocks, and headings.",
+      "recommendedCases": ["simplify-main-content", "focus-reader-overlay", "local-summary", "reading-guide-keyboard"],
+      "automationNotes": "Good stable target for public documentation checks."
+    },
+    {
+      "id": "mozilla-mdn",
+      "name": "MDN Web Docs",
+      "url": "https://developer.mozilla.org/",
+      "category": "documentation",
+      "whyTest": "Reference pages, examples, code blocks, sidebars, and article content.",
+      "recommendedCases": ["simplify-main-content", "focus-reader-overlay", "local-summary", "navigation-helpers"],
+      "automationNotes": "Good stable target for documentation-style pages."
+    }
+  ]
+}

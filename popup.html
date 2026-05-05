@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AccessiView</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="topbar">
+        <div>
+          <h1>AccessiView</h1>
+          <p>Page accessibility controls</p>
+        </div>
+        <label class="switch" title="Enable or disable AccessiView">
+          <span>On</span>
+          <input id="enabled" type="checkbox">
+        </label>
+      </header>
+
+      <section class="panel site-panel">
+        <div>
+          <div class="section-heading">
+            <h2>Website Settings</h2>
+            <button id="resetSite" class="text-button" type="button">Clear site</button>
+          </div>
+          <p id="siteName">Current website</p>
+        </div>
+        <label class="check-row">
+          <input id="siteSettingsToggle" type="checkbox">
+          Use separate settings for this website
+        </label>
+        <p id="scopeStatus">Saving changes globally</p>
+        <p id="pageStatus">Page status unavailable</p>
+        <label class="check-row">
+          <input type="checkbox" data-path="ui.floatingButton">
+          Show page quick button
+        </label>
+        <div class="button-row wrap-row">
+          <button id="openSidePanel" type="button">Open side panel</button>
+          <button id="pickContent" type="button">Pick main content</button>
+          <button id="clearContentPick" class="quiet" type="button">Clear pick</button>
+          <button id="undoSettings" class="quiet" type="button">Undo</button>
+        </div>
+      </section>
+
+      <section class="panel audit-panel">
+        <div class="section-heading">
+          <h2>Accessibility Health</h2>
+          <div class="button-row">
+            <button id="runAudit" type="button">Scan</button>
+            <button id="applyAuditFixes" class="quiet" type="button">Apply</button>
+          </div>
+        </div>
+        <div id="auditSummary" class="audit-summary">Scan this page for common accessibility issues.</div>
+        <div id="auditRecommendations" class="recommendation-list"></div>
+      </section>
+
+      <section class="panel summary-panel">
+        <div class="section-heading">
+          <h2>Local Summary</h2>
+          <div class="button-row">
+            <button id="summarizePage" type="button">Summarize</button>
+            <button id="readSummary" class="quiet" type="button">Read</button>
+          </div>
+        </div>
+        <label>
+          Length
+          <select data-path="summary.length">
+            <option value="short">Short</option>
+            <option value="medium">Medium</option>
+            <option value="detailed">Detailed</option>
+          </select>
+        </label>
+        <label>
+          Format
+          <select data-path="summary.format">
+            <option value="bullets">Bullet points</option>
+            <option value="paragraph">Paragraph</option>
+            <option value="actions">Key actions</option>
+          </select>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="summary.plainLanguage">
+          Plain language
+        </label>
+        <p id="summaryStatus">Runs locally when the browser model is available, otherwise uses offline extraction.</p>
+        <div id="summaryOutput" class="summary-output" tabindex="0"></div>
+      </section>
+
+      <section class="panel preset-panel">
+        <div class="section-heading">
+          <h2>Presets</h2>
+          <button id="openOptions" class="text-button" type="button">Settings</button>
+        </div>
+        <div class="preset-grid" data-preset-list></div>
+      </section>
+
+      <section class="panel profile-panel">
+        <div class="section-heading">
+          <h2>Profiles</h2>
+          <button id="saveProfile" class="text-button" type="button">Save</button>
+        </div>
+        <label>
+          Saved profile
+          <select id="profileSelect"></select>
+        </label>
+        <div class="button-row">
+          <button id="applyProfile" type="button">Apply</button>
+          <button id="deleteProfile" class="quiet" type="button">Delete</button>
+        </div>
+      </section>
+
+      <section class="mode-card" data-mode-card="focus">
+        <div class="mode-title">
+          <div>
+            <h2>Focus Mode</h2>
+            <p>Center main content and reduce distractions.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.focus.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label>
+          Distraction handling
+          <select data-path="modes.focus.distractionMode">
+            <option value="dim">Dim distractions</option>
+            <option value="hide">Hide distractions</option>
+          </select>
+        </label>
+        <label>
+          Content width <output data-output="modes.focus.maxWidth" data-suffix="px"></output>
+          <input type="range" min="560" max="1180" step="20" data-path="modes.focus.maxWidth">
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.focus.hideSticky">
+          Reduce sticky headers
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.focus.textOnly">
+          Text-only reader overlay
+        </label>
+        <div class="color-grid">
+          <label>Page <input type="color" data-path="modes.focus.background"></label>
+          <label>Text <input type="color" data-path="modes.focus.text"></label>
+          <label>Links <input type="color" data-path="modes.focus.link"></label>
+        </div>
+      </section>
+
+      <section class="mode-card" data-mode-card="simplify">
+        <div class="mode-title">
+          <div>
+            <h2>Simplified Page</h2>
+            <p>Keep the main content and remove repeated page regions.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.simplify.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label>
+          Content width <output data-output="modes.simplify.maxWidth" data-suffix="px"></output>
+          <input type="range" min="560" max="1180" step="20" data-path="modes.simplify.maxWidth">
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.simplify.hideNav">
+          Hide navigation and search
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.simplify.hideSidebars">
+          Hide sidebars and related content
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.simplify.hideComments">
+          Hide comments and sharing sections
+        </label>
+      </section>
+
+      <section class="mode-card" data-mode-card="contrast">
+        <div class="mode-title">
+          <div>
+            <h2>High Contrast</h2>
+            <p>Replace page colors with readable contrast.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.contrast.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label>
+          Theme
+          <select data-path="modes.contrast.preset">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="yellow">Yellow on black</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <div class="color-grid">
+          <label>Background <input type="color" data-path="modes.contrast.background"></label>
+          <label>Text <input type="color" data-path="modes.contrast.text"></label>
+          <label>Links <input type="color" data-path="modes.contrast.link"></label>
+          <label>Border <input type="color" data-path="modes.contrast.border"></label>
+        </div>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.contrast.invertImages">
+          Invert images with page colors
+        </label>
+      </section>
+
+      <section class="mode-card" data-mode-card="text">
+        <div class="mode-title">
+          <div>
+            <h2>Reading Text</h2>
+            <p>Adjust text size, spacing, and font.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.text.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label>
+          Text size <output data-output="modes.text.scale" data-suffix="%"></output>
+          <input type="range" min="100" max="200" step="5" data-path="modes.text.scale">
+        </label>
+        <label>
+          Line height <output data-output="modes.text.lineHeight"></output>
+          <input type="range" min="1.2" max="2.2" step="0.05" data-path="modes.text.lineHeight">
+        </label>
+        <label>
+          Letter spacing <output data-output="modes.text.letterSpacing" data-suffix="em"></output>
+          <input type="range" min="0" max="0.12" step="0.01" data-path="modes.text.letterSpacing">
+        </label>
+        <label>
+          Font
+          <select data-path="modes.text.fontFamily">
+            <option value="system">System sans</option>
+            <option value="dyslexia">Readable sans</option>
+            <option value="serif">Serif</option>
+            <option value="mono">Mono</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="mode-card" data-mode-card="motion">
+        <div class="mode-title">
+          <div>
+            <h2>Reduce Motion</h2>
+            <p>Stop animation and media interruptions.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.motion.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.motion.disableAnimations">
+          Disable animations and transitions
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.motion.reduceScrolling">
+          Force instant scrolling
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.motion.pauseMedia">
+          Pause autoplay video and audio
+        </label>
+      </section>
+
+      <section class="mode-card" data-mode-card="guide">
+        <div class="mode-title">
+          <div>
+            <h2>Reading Guide</h2>
+            <p>Follow the cursor with a reading band.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.guide.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label>
+          Band height <output data-output="modes.guide.height" data-suffix="px"></output>
+          <input type="range" min="36" max="160" step="4" data-path="modes.guide.height">
+        </label>
+        <label>
+          Opacity <output data-output="modes.guide.opacity"></output>
+          <input type="range" min="0.08" max="0.5" step="0.02" data-path="modes.guide.opacity">
+        </label>
+        <label>
+          Guide style
+          <select data-path="modes.guide.style">
+            <option value="band">Reading band</option>
+            <option value="ruler">Ruler box</option>
+            <option value="line">Focus line</option>
+          </select>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.guide.followFocus">
+          Follow keyboard focus
+        </label>
+        <label>
+          Color
+          <input type="color" data-path="modes.guide.color">
+        </label>
+      </section>
+
+      <section class="mode-card" data-mode-card="navigation">
+        <div class="mode-title">
+          <div>
+            <h2>Navigation</h2>
+            <p>Make links, focus states, and images easier to inspect.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.navigation.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.navigation.focusRing">
+          Strong keyboard focus ring
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.navigation.underlineLinks">
+          Underline links
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.navigation.showAltWarnings">
+          Outline images missing alt text
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.navigation.keyboardMap">
+          Keep keyboard map open
+        </label>
+        <button id="showKeyboardMap" type="button">Show Keyboard Map</button>
+      </section>
+
+      <section class="mode-card" data-mode-card="forms">
+        <div class="mode-title">
+          <div>
+            <h2>Form Helper</h2>
+            <p>Highlight fields that need labels, values, or attention.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.forms.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.forms.highlightRequired">
+          Highlight required fields
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.forms.flagUnlabeled">
+          Flag unlabeled controls
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.forms.flagInvalid">
+          Flag invalid fields
+        </label>
+      </section>
+
+      <section class="mode-card" data-mode-card="cognitive">
+        <div class="mode-title">
+          <div>
+            <h2>Cognitive Support</h2>
+            <p>Reduce page clutter and make reading structure clearer.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.cognitive.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label>
+          Reading width <output data-output="modes.cognitive.maxWidth" data-suffix="px"></output>
+          <input type="range" min="560" max="1020" step="20" data-path="modes.cognitive.maxWidth">
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.cognitive.hideExtras">
+          Hide extra page regions
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.cognitive.emphasizeHeadings">
+          Emphasize headings
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.cognitive.chunkText">
+          Add paragraph separators
+        </label>
+      </section>
+
+      <section class="mode-card" data-mode-card="filter">
+        <div class="mode-title">
+          <div>
+            <h2>Color Filter</h2>
+            <p>Tune color intensity and brightness.</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" data-path="modes.filter.enabled">
+            <span></span>
+          </label>
+        </div>
+        <label>
+          Preset
+          <select data-path="modes.filter.preset">
+            <option value="none">Manual</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="warm">Warm</option>
+            <option value="cool">Cool</option>
+          </select>
+        </label>
+        <label>
+          Saturation <output data-output="modes.filter.saturation" data-suffix="%"></output>
+          <input type="range" min="40" max="160" step="5" data-path="modes.filter.saturation">
+        </label>
+        <label>
+          Brightness <output data-output="modes.filter.brightness" data-suffix="%"></output>
+          <input type="range" min="70" max="130" step="5" data-path="modes.filter.brightness">
+        </label>
+        <label>
+          Grayscale <output data-output="modes.filter.grayscale" data-suffix="%"></output>
+          <input type="range" min="0" max="100" step="5" data-path="modes.filter.grayscale">
+        </label>
+      </section>
+
+      <section class="panel speech-panel">
+        <div class="section-heading">
+          <h2>Read Aloud</h2>
+          <div class="button-row">
+            <button id="readPage" type="button">Read</button>
+            <button id="stopRead" class="quiet" type="button">Stop</button>
+          </div>
+        </div>
+        <div class="button-row wrap-row speech-controls">
+          <button id="previousRead" type="button">Previous</button>
+          <button id="pauseRead" type="button">Pause</button>
+          <button id="resumeRead" type="button">Resume</button>
+          <button id="nextRead" type="button">Next</button>
+        </div>
+        <p id="speechStatus">Read selected text or detected page content.</p>
+        <label>
+          Voice
+          <select data-path="modes.speech.voiceURI" data-voice-select>
+            <option value="auto">Auto switch by detected language</option>
+          </select>
+        </label>
+        <label>
+          Speech speed <output data-output="modes.speech.rate"></output>
+          <input type="range" min="0.6" max="1.8" step="0.1" data-path="modes.speech.rate">
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.speech.naturalPauses">
+          Natural pauses between sections
+        </label>
+        <label class="check-row">
+          <input type="checkbox" data-path="modes.speech.highlight">
+          Highlight current speech
+        </label>
+      </section>
+
+      <footer class="footer">
+        <button id="reset" class="danger" type="button">Reset</button>
+        <span id="status" role="status"></span>
+      </footer>
+    </main>
+
+    <script src="shared/settings.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

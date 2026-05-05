@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>AccessiView Article Fixture</title>
+    <style>
+      body {
+        margin: 0;
+        color: #6f6f6f;
+        background: #747474;
+        font-family: Arial, sans-serif;
+        scroll-behavior: smooth;
+      }
+
+      header,
+      nav,
+      aside,
+      footer,
+      .share-box,
+      .comments,
+      .ad-slot {
+        padding: 12px;
+        background: #eeeeee;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 24px;
+        background: #ffffff;
+      }
+
+      .low-contrast {
+        color: #aaaaaa;
+        background: #aaaaaa;
+      }
+    </style>
+  </head>
+  <body>
+    <header>Header area</header>
+    <nav><a href="#content">Navigation link</a></nav>
+    <aside>Related stories and promotions</aside>
+    <main id="content">
+      <article>
+        <h1>Article Fixture</h1>
+        <p class="low-contrast">This paragraph intentionally has poor contrast for the health scanner.</p>
+        <p>This readable article body has enough text for reader extraction. It includes a <a href="/article.html#details">reader details link</a> so focus mode can keep useful links clickable. It includes several sentences so simplify mode, focus mode, and cognitive chunking can be tested with realistic content.</p>
+        <img src="missing-alt.png">
+        <div class="ad-slot">Advertisement</div>
+        <section class="share-box">Share this article</section>
+        <section class="comments">Comments</section>
+      </article>
+    </main>
+    <footer>Footer links</footer>
+  </body>
+</html>
