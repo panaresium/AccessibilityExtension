@@ -23,11 +23,13 @@
   <body>
     <main>
       <h1>Form Fixture</h1>
+      <p>This checkout fixture includes readable text so privacy-sensitive summary blocking can be tested before any local summary is generated.</p>
       <form>
         <label for="name">Name</label>
         <input id="name" required>
         <input required>
         <input type="email" value="not-an-email">
+        <input autocomplete="section-billing cc-number" value="4111 1111 1111 1111">
         <button class="tiny-target" type="button">x</button>
         <button type="submit">Submit</button>
       </form>

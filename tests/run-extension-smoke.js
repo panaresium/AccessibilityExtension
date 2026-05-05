@@ -301,6 +301,16 @@ async function run() {
       unlabeled: document.querySelectorAll("[data-av-form-unlabeled='true']").length,
       invalid: document.querySelectorAll("[data-av-form-invalid='true']").length
     }));
+    const formSummaryResult = await sendMessageToFixture(optionsPage, "/form.html", {
+      type: "ACCESSIVIEW_SUMMARIZE_PAGE",
+      options: {
+        engine: "extractive",
+        length: "short",
+        format: "bullets",
+        plainLanguage: true,
+        cache: false
+      }
+    });
 
     const popupPage = await context.newPage();
     await popupPage.goto(`chrome-extension://${extensionId}/popup.html`);
@@ -314,7 +324,7 @@ async function run() {
       hasSummaryControls: Boolean(document.getElementById("summarizePage") && document.getElementById("summaryOutput"))
     }));
 
-    const result = { manifestResult, automationCoverageResult, optionsResult, articleResult, summaryResult, focusReaderResult, formResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, optionsResult, articleResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -346,6 +356,9 @@ async function run() {
     }
     if (!formResult.required || !formResult.unlabeled || !formResult.invalid) {
       throw new Error("Form fixture failed AccessiView assertions.");
+    }
+    if (formSummaryResult.ok || !String(formSummaryResult.message || "").includes("Summary is disabled")) {
+      throw new Error("Sensitive form fixture failed summary privacy assertions.");
     }
     if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls) {
       throw new Error("Popup fixture failed AccessiView assertions.");
