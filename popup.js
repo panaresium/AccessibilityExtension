@@ -38,15 +38,15 @@
   let saveScope = "global";
   let saveTimer = null;
   let pageStatusTimer = null;
+  let activeTabRefreshTimer = null;
   let speechVoices = [];
   let currentAudit = null;
   let currentSummary = null;
+  let popupReady = false;
 
   document.addEventListener("DOMContentLoaded", () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      currentTab = tabs[0] || null;
-      currentUrl = currentTab && /^https?:\/\//.test(currentTab.url || "") ? currentTab.url : "";
-
+    queryActiveTab((tab) => {
+      setCurrentTab(tab);
       chrome.storage.sync.get(STORAGE_KEY, (syncResult) => {
         globalSettings = withDefaults(syncResult[STORAGE_KEY]);
         chrome.storage.local.get(SITE_STORAGE_KEY, (localResult) => {
@@ -61,12 +61,90 @@
               bindEvents();
               setupVoiceControls();
               render();
+              popupReady = true;
+              watchActiveTabChanges();
             });
           });
         });
       });
     });
   });
+
+  function isWebPageUrl(url) {
+    return /^https?:\/\//.test(url || "");
+  }
+
+  function queryActiveTab(callback) {
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+      const error = chrome.runtime.lastError;
+      if (!error && tabs && tabs[0]) {
+        callback(tabs[0]);
+        return;
+      }
+
+      chrome.tabs.query({ active: true, currentWindow: true }, (fallbackTabs) => {
+        const fallbackError = chrome.runtime.lastError;
+        callback(fallbackError ? null : fallbackTabs && fallbackTabs[0] ? fallbackTabs[0] : null);
+      });
+    });
+  }
+
+  function setCurrentTab(tab) {
+    const previousTabId = currentTab && currentTab.id;
+    const previousUrl = currentUrl;
+    currentTab = tab || null;
+    currentUrl = currentTab && isWebPageUrl(currentTab.url || "") ? currentTab.url : "";
+    return previousTabId !== (currentTab && currentTab.id) || previousUrl !== currentUrl;
+  }
+
+  function refreshActiveTabContext(options) {
+    const shouldRender = !options || options.render !== false;
+    queryActiveTab((tab) => {
+      const changed = setCurrentTab(tab);
+      if (!popupReady || !changed) {
+        return;
+      }
+
+      refreshEffectiveSettings();
+      clearPageScopedOutputs();
+
+      if (shouldRender) {
+        render();
+      }
+    });
+  }
+
+  function scheduleActiveTabRefresh() {
+    clearTimeout(activeTabRefreshTimer);
+    activeTabRefreshTimer = setTimeout(() => {
+      refreshActiveTabContext();
+    }, 0);
+  }
+
+  function watchActiveTabChanges() {
+    if (chrome.tabs && chrome.tabs.onActivated) {
+      chrome.tabs.onActivated.addListener(scheduleActiveTabRefresh);
+    }
+
+    if (chrome.tabs && chrome.tabs.onUpdated) {
+      chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+        if (!currentTab || tabId !== currentTab.id) {
+          return;
+        }
+
+        if (changeInfo.url || changeInfo.status === "complete") {
+          scheduleActiveTabRefresh();
+        }
+      });
+    }
+
+    window.addEventListener("focus", scheduleActiveTabRefresh);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        scheduleActiveTabRefresh();
+      }
+    });
+  }
 
   function bindEvents() {
     document.getElementById("enabled").addEventListener("change", (event) => {
@@ -525,7 +603,12 @@
       ? { tabId: currentTab.id }
       : currentTab && currentTab.windowId
         ? { windowId: currentTab.windowId }
-        : {};
+        : null;
+
+    if (!options) {
+      setStatus("Open a web page first.");
+      return;
+    }
 
     chrome.sidePanel.open(options)
       .then(() => setStatus("Side panel opened."))
@@ -589,6 +672,24 @@
       item.append(title, description);
       list.append(item);
     });
+  }
+
+  function clearPageScopedOutputs() {
+    currentAudit = null;
+    currentSummary = null;
+    renderAuditRecommendations();
+    setAuditSummary("Scan this page for common accessibility issues.");
+    setStructureSummary("Inspect headings, landmarks, live regions, and keyboard focus order.");
+    clearStructureOutput();
+
+    const summaryStatus = document.getElementById("summaryStatus");
+    const summaryOutput = document.getElementById("summaryOutput");
+    if (summaryStatus) {
+      summaryStatus.textContent = "Runs locally when the browser model is available, otherwise uses offline extraction.";
+    }
+    if (summaryOutput) {
+      summaryOutput.textContent = "";
+    }
   }
 
   function inspectPageStructure() {
@@ -1078,19 +1179,23 @@
   }
 
   function sendMessageToActiveTab(message, callback) {
-    if (!currentTab || !currentTab.id || !currentUrl) {
-      setStatus("Open a web page to test.");
-      if (callback) {
-        callback({ ok: false });
-      }
-      return;
-    }
+    queryActiveTab((tab) => {
+      setCurrentTab(tab);
 
-    chrome.tabs.sendMessage(currentTab.id, message, (response) => {
-      const error = chrome.runtime.lastError;
-      if (callback) {
-        callback(error ? { ok: false, message: error.message } : response || { ok: true });
+      if (!tab || !tab.id || !currentUrl) {
+        setStatus("Open a web page to test.");
+        if (callback) {
+          callback({ ok: false });
+        }
+        return;
       }
+
+      chrome.tabs.sendMessage(tab.id, message, (response) => {
+        const error = chrome.runtime.lastError;
+        if (callback) {
+          callback(error ? { ok: false, message: error.message } : response || { ok: true });
+        }
+      });
     });
   }
 

@@ -134,6 +134,57 @@ function validateAutomationCoverage() {
   };
 }
 
+<<<<<<< Updated upstream
+=======
+function getFunctionSource(source, name) {
+  const start = source.indexOf(`function ${name}`);
+  if (start === -1) {
+    return "";
+  }
+
+  const nextFunction = source.indexOf("\n  function ", start + 1);
+  return nextFunction === -1 ? source.slice(start) : source.slice(start, nextFunction);
+}
+
+function validatePopupActiveTabTargeting() {
+  const popupSource = fs.readFileSync(path.join(projectRoot, "popup.js"), "utf8");
+  const queryActiveTabSource = getFunctionSource(popupSource, "queryActiveTab");
+  const watchActiveTabChangesSource = getFunctionSource(popupSource, "watchActiveTabChanges");
+  const sendMessageSource = getFunctionSource(popupSource, "sendMessageToActiveTab");
+  const openSidePanelSource = getFunctionSource(popupSource, "openSidePanel");
+
+  return {
+    hasActiveTabQueryFallback: queryActiveTabSource.includes("lastFocusedWindow") &&
+      queryActiveTabSource.includes("currentWindow"),
+    refreshesOnTabActivation: watchActiveTabChangesSource.includes("chrome.tabs.onActivated") &&
+      watchActiveTabChangesSource.includes("scheduleActiveTabRefresh"),
+    refreshesMessageTargetBeforeSend: sendMessageSource.includes("queryActiveTab") &&
+      sendMessageSource.includes("chrome.tabs.sendMessage(tab.id"),
+    opensSidePanelWithCurrentTabContext: openSidePanelSource.includes("currentTab.id") &&
+      openSidePanelSource.includes("chrome.sidePanel.open(options)")
+  };
+}
+
+function validateSettingsMergeSafety() {
+  const settingsPath = path.join(projectRoot, "shared", "settings.js");
+  const sandbox = {};
+  vm.runInNewContext(fs.readFileSync(settingsPath, "utf8"), sandbox, {
+    filename: settingsPath
+  });
+
+  const payload = JSON.parse("{\"__proto__\":{\"polluted\":\"yes\"},\"constructor\":{\"prototype\":{\"polluted\":\"constructor\"}},\"modes\":{\"text\":{\"scale\":130}}}");
+  const merged = sandbox.AccessiViewConfig.withDefaults(payload);
+
+  return {
+    keepsSettingsOverride: merged.modes.text.scale === 130,
+    inheritedPollution: merged.polluted || Object.getPrototypeOf(merged).polluted || null,
+    hasUnsafeOwnKeys: ["__proto__", "constructor", "prototype"].some((key) => (
+      Object.prototype.hasOwnProperty.call(merged, key)
+    ))
+  };
+}
+
+>>>>>>> Stashed changes
 function copyExtensionToTemp() {
   const extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), "accessiview-ext-"));
   fs.cpSync(projectRoot, extensionPath, {
@@ -216,6 +267,11 @@ async function sendMessageToFixture(optionsPage, urlPart, message) {
 async function run() {
   const manifestResult = validateManifest();
   const automationCoverageResult = validateAutomationCoverage();
+<<<<<<< Updated upstream
+=======
+  const popupActiveTabTargetingResult = validatePopupActiveTabTargeting();
+  const settingsMergeSafetyResult = validateSettingsMergeSafety();
+>>>>>>> Stashed changes
   const extensionPath = copyExtensionToTemp();
   const server = await startFixtureServer();
   const context = await launchWithExtension(extensionPath);
@@ -389,7 +445,11 @@ async function run() {
       })()
     }));
 
+<<<<<<< Updated upstream
     const result = { manifestResult, automationCoverageResult, optionsResult, articleResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
+=======
+    const result = { manifestResult, automationCoverageResult, popupActiveTabTargetingResult, settingsMergeSafetyResult, optionsResult, articleResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
+>>>>>>> Stashed changes
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -407,6 +467,15 @@ async function run() {
     if (!automationCoverageResult.includesRegionalCoverage || !automationCoverageResult.includesBuiltInRuleCoverage) {
       throw new Error("Automation coverage catalog is missing regional or built-in site-rule targets.");
     }
+<<<<<<< Updated upstream
+=======
+    if (!popupActiveTabTargetingResult.hasActiveTabQueryFallback || !popupActiveTabTargetingResult.refreshesOnTabActivation || !popupActiveTabTargetingResult.refreshesMessageTargetBeforeSend || !popupActiveTabTargetingResult.opensSidePanelWithCurrentTabContext) {
+      throw new Error("Popup active-tab targeting regression assertions failed.");
+    }
+    if (!settingsMergeSafetyResult.keepsSettingsOverride || settingsMergeSafetyResult.inheritedPollution || settingsMergeSafetyResult.hasUnsafeOwnKeys) {
+      throw new Error("Settings merge failed unsafe key assertions.");
+    }
+>>>>>>> Stashed changes
     if (!articleResult.simplifyMain || !articleResult.missingAlt || !articleResult.keyboardMap || !articleResult.guide || !articleResult.quickButton || articleResult.quickButtonPanelRole !== "group") {
       throw new Error("Article fixture failed AccessiView assertions.");
     }
