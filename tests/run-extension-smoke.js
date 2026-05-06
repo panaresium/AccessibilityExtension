@@ -17,7 +17,7 @@ const projectRoot = path.resolve(__dirname, "..");
 const fixtureRoot = path.join(__dirname, "fixtures");
 const edgePath = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 const chromePath = "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const allowedPermissions = new Set(["storage", "activeTab", "sidePanel"]);
+const allowedPermissions = new Set(["storage", "activeTab", "sidePanel", "scripting"]);
 const requiredCoverageCases = [
   "manifest-security",
   "simplify-main-content",
@@ -45,6 +45,7 @@ function validateManifest() {
   return {
     manifestVersion: manifest.manifest_version,
     hasServiceWorker: manifest.background && manifest.background.service_worker === "background.js",
+    hasScriptingPermission: permissions.includes("scripting"),
     hasSettingsBeforeContent: contentScriptFiles.indexOf("shared/settings.js") > -1 &&
       contentScriptFiles.indexOf("shared/settings.js") < contentScriptFiles.indexOf("content.js"),
     hasDocumentStartScrollScript: contentScripts.some((entry) => (
@@ -213,6 +214,32 @@ async function sendMessageToFixture(optionsPage, urlPart, message) {
   }), { expectedUrlPart: urlPart, payload: message });
 }
 
+async function injectAccessiViewIntoFixture(optionsPage, urlPart) {
+  return optionsPage.evaluate((expectedUrlPart) => new Promise((resolve) => {
+    chrome.tabs.query({}, (tabs) => {
+      const tab = tabs.find((candidate) => String(candidate.url || "").includes(expectedUrlPart));
+      if (!tab) {
+        resolve({ ok: false, message: "Fixture tab not found." });
+        return;
+      }
+
+      const target = { tabId: tab.id, allFrames: true };
+      chrome.scripting.executeScript({ target, files: ["page-scroll.js"], world: "MAIN" }, () => {
+        const pageScrollError = chrome.runtime.lastError;
+        if (pageScrollError) {
+          resolve({ ok: false, message: pageScrollError.message });
+          return;
+        }
+
+        chrome.scripting.executeScript({ target, files: ["shared/settings.js", "content.js"] }, () => {
+          const contentError = chrome.runtime.lastError;
+          resolve(contentError ? { ok: false, message: contentError.message } : { ok: true });
+        });
+      });
+    });
+  }), urlPart);
+}
+
 async function run() {
   const manifestResult = validateManifest();
   const automationCoverageResult = validateAutomationCoverage();
@@ -291,6 +318,10 @@ async function run() {
     const tabOrderResult = await sendMessageToFixture(optionsPage, "/article.html?structure=1", {
       type: "ACCESSIVIEW_GET_TAB_ORDER"
     });
+    const lateInjectionResult = await injectAccessiViewIntoFixture(optionsPage, "/article.html?structure=1");
+    const lateInjectionStatusResult = await sendMessageToFixture(optionsPage, "/article.html?structure=1", {
+      type: "ACCESSIVIEW_GET_STATUS"
+    });
     await structurePage.close();
     const summaryResult = await sendMessageToFixture(optionsPage, "/article.html", {
       type: "ACCESSIVIEW_SUMMARIZE_PAGE",
@@ -359,6 +390,7 @@ async function run() {
       hasSidePanelButton: Boolean(document.getElementById("openSidePanel")),
       hasSummaryControls: Boolean(document.getElementById("summarizePage") && document.getElementById("summaryOutput")),
       hasStructureControls: Boolean(document.getElementById("inspectStructure") && document.getElementById("inspectTabOrder") && document.getElementById("structureOutput")),
+      hasScriptingApi: Boolean(chrome.scripting && chrome.scripting.executeScript),
       hasNamedModeSwitches: (() => {
         const switches = Array.from(document.querySelectorAll(".toggle input[data-path$='.enabled']"));
         return switches.length >= 10 && switches.every((control) => Boolean(control.getAttribute("aria-label")));
@@ -389,10 +421,10 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, optionsResult, articleResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, optionsResult, articleResult, overlayTabOrderResult, structureResult, tabOrderResult, lateInjectionResult, lateInjectionStatusResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
-    if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
+    if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasScriptingPermission || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
       throw new Error("Manifest failed AccessiView extension wiring assertions.");
     }
     if (manifestResult.unexpectedPermissions.length || manifestResult.unsafeCsp) {
@@ -419,6 +451,9 @@ async function run() {
     if (!tabOrderResult.ok || !tabOrderResult.tabOrder || tabOrderResult.tabOrder.counts.focusTargets < 1 || tabOrderResult.tabOrder.counts.missingNames !== 0 || !tabOrderResult.tabOrder.items[0].selector) {
       throw new Error("Tab order fixture failed AccessiView assertions.");
     }
+    if (!lateInjectionResult.ok || !lateInjectionStatusResult.ok) {
+      throw new Error("Late content-script injection failed AccessiView assertions.");
+    }
     if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear || !optionsResult.hasReadableActivePresetDescription) {
       throw new Error("Options fixture failed summary control assertions.");
     }
@@ -434,7 +469,7 @@ async function run() {
     if (formSummaryResult.ok || !String(formSummaryResult.message || "").includes("Summary is disabled")) {
       throw new Error("Sensitive form fixture failed summary privacy assertions.");
     }
-    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
+    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasStructureControls || !popupResult.hasScriptingApi || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
       throw new Error("Popup fixture failed AccessiView assertions.");
     }
   } finally {

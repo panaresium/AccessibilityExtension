@@ -3,7 +3,7 @@
   "name": "AccessiView Prototype",
   "version": "0.1.0",
   "description": "Prototype accessibility extension that adapts web pages to user preferences.",
-  "permissions": ["storage", "activeTab", "sidePanel"],
+  "permissions": ["storage", "activeTab", "sidePanel", "scripting"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "AccessiView",

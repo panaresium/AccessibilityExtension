@@ -1,4 +1,10 @@
 (function initAccessiViewContent() {
+  if (globalThis.__accessiViewContentScriptLoaded) {
+    return;
+  }
+
+  globalThis.__accessiViewContentScriptLoaded = true;
+
   const {
     STORAGE_KEY,
     SITE_STORAGE_KEY,

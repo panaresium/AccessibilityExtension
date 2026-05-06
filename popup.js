@@ -41,6 +41,7 @@
   let speechVoices = [];
   let currentAudit = null;
   let currentSummary = null;
+  const lateInjectedTabs = new Set();
 
   document.addEventListener("DOMContentLoaded", () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -1086,10 +1087,106 @@
       return;
     }
 
+    sendMessageToCurrentTab(message, (response, errorMessage) => {
+      if (!errorMessage) {
+        if (callback) {
+          callback(response || { ok: true });
+        }
+        return;
+      }
+
+      if (!shouldTryLateInjection(errorMessage)) {
+        if (callback) {
+          callback({ ok: false, message: errorMessage });
+        }
+        return;
+      }
+
+      ensureContentScriptsInActiveTab((injectionResponse) => {
+        if (!injectionResponse.ok) {
+          if (callback) {
+            callback(injectionResponse);
+          }
+          return;
+        }
+
+        sendMessageToCurrentTab(message, (retryResponse, retryErrorMessage) => {
+          if (callback) {
+            callback(retryErrorMessage ? { ok: false, message: retryErrorMessage } : retryResponse || { ok: true });
+          }
+        });
+      });
+    });
+  }
+
+  function sendMessageToCurrentTab(message, callback) {
     chrome.tabs.sendMessage(currentTab.id, message, (response) => {
       const error = chrome.runtime.lastError;
-      if (callback) {
-        callback(error ? { ok: false, message: error.message } : response || { ok: true });
+      callback(response, error ? error.message : "");
+    });
+  }
+
+  function shouldTryLateInjection(errorMessage) {
+    return /Receiving end does not exist|Could not establish connection/i.test(String(errorMessage || ""));
+  }
+
+  function ensureContentScriptsInActiveTab(callback) {
+    if (!chrome.scripting || !chrome.scripting.executeScript) {
+      callback({ ok: false, message: "Reload this page to activate AccessiView." });
+      return;
+    }
+
+    if (lateInjectedTabs.has(currentTab.id)) {
+      callback({ ok: false, message: "AccessiView could not connect to this page." });
+      return;
+    }
+
+    lateInjectedTabs.add(currentTab.id);
+    setStatus("Preparing AccessiView on this page...");
+
+    const target = { tabId: currentTab.id, allFrames: true };
+
+    injectPageScrollScript(target)
+      .then(() => executeScript({ target, files: ["shared/settings.js", "content.js"] }))
+      .then(() => callback({ ok: true }))
+      .catch((error) => {
+        lateInjectedTabs.delete(currentTab.id);
+        callback({
+          ok: false,
+          message: error && error.message ? error.message : "AccessiView could not run on this page."
+        });
+      });
+  }
+
+  function injectPageScrollScript(target) {
+    return executeScript({ target, files: ["page-scroll.js"], world: "MAIN" })
+      .catch((error) => {
+        if (/world/i.test(String(error && error.message ? error.message : error))) {
+          return executeScript({ target, files: ["page-scroll.js"] });
+        }
+
+        throw error;
+      });
+  }
+
+  function executeScript(injection) {
+    return new Promise((resolve, reject) => {
+      try {
+        const maybePromise = chrome.scripting.executeScript(injection, (results) => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(new Error(error.message));
+            return;
+          }
+
+          resolve(results);
+        });
+
+        if (maybePromise && typeof maybePromise.then === "function") {
+          maybePromise.then(resolve, reject);
+        }
+      } catch (error) {
+        reject(error);
       }
     });
   }
