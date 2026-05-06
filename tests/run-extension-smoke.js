@@ -2,6 +2,7 @@ const fs = require("fs");
 const http = require("http");
 const os = require("os");
 const path = require("path");
+const vm = require("vm");
 
 function requirePlaywright() {
   try {
@@ -134,6 +135,25 @@ function validateAutomationCoverage() {
   };
 }
 
+function validateSettingsMergeSafety() {
+  const settingsPath = path.join(projectRoot, "shared", "settings.js");
+  const sandbox = {};
+  vm.runInNewContext(fs.readFileSync(settingsPath, "utf8"), sandbox, {
+    filename: settingsPath
+  });
+
+  const payload = JSON.parse("{\"__proto__\":{\"polluted\":\"yes\"},\"constructor\":{\"prototype\":{\"polluted\":\"constructor\"}},\"modes\":{\"text\":{\"scale\":130}}}");
+  const merged = sandbox.AccessiViewConfig.withDefaults(payload);
+
+  return {
+    keepsSettingsOverride: merged.modes.text.scale === 130,
+    inheritedPollution: merged.polluted || Object.getPrototypeOf(merged).polluted || null,
+    hasUnsafeOwnKeys: ["__proto__", "constructor", "prototype"].some((key) => (
+      Object.prototype.hasOwnProperty.call(merged, key)
+    ))
+  };
+}
+
 function copyExtensionToTemp() {
   const extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), "accessiview-ext-"));
   fs.cpSync(projectRoot, extensionPath, {
@@ -216,6 +236,7 @@ async function sendMessageToFixture(optionsPage, urlPart, message) {
 async function run() {
   const manifestResult = validateManifest();
   const automationCoverageResult = validateAutomationCoverage();
+  const settingsMergeSafetyResult = validateSettingsMergeSafety();
   const extensionPath = copyExtensionToTemp();
   const server = await startFixtureServer();
   const context = await launchWithExtension(extensionPath);
@@ -389,7 +410,7 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, optionsResult, articleResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, settingsMergeSafetyResult, optionsResult, articleResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -406,6 +427,9 @@ async function run() {
     }
     if (!automationCoverageResult.includesRegionalCoverage || !automationCoverageResult.includesBuiltInRuleCoverage) {
       throw new Error("Automation coverage catalog is missing regional or built-in site-rule targets.");
+    }
+    if (!settingsMergeSafetyResult.keepsSettingsOverride || settingsMergeSafetyResult.inheritedPollution || settingsMergeSafetyResult.hasUnsafeOwnKeys) {
+      throw new Error("Settings merge failed unsafe key assertions.");
     }
     if (!articleResult.simplifyMain || !articleResult.missingAlt || !articleResult.keyboardMap || !articleResult.guide || !articleResult.quickButton || articleResult.quickButtonPanelRole !== "group") {
       throw new Error("Article fixture failed AccessiView assertions.");
