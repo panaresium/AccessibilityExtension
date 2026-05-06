@@ -848,21 +848,15 @@
   }
 
   function ensureReadablePalette(palette) {
-    const background = palette.background || "#050505";
-    const surface = palette.surface || background;
-    let text = palette.text || "#ffffff";
-    let link = palette.link || "#7dd3fc";
-    let border = palette.border || text;
+    const background = normalizeHexColor(palette.background, "#050505");
+    let text = getReadableColor(background, palette.text, "#111827", "#ffffff", 4.5);
+    let link = getReadableColor(background, palette.link, "#0645ad", "#7dd3fc", 3);
+    const surface = getReadableSurface(background, palette.surface, text, link);
+    text = getReadableColor(surface, text, "#111827", "#ffffff", 4.5);
+    link = getReadableColor(surface, link, "#0645ad", "#7dd3fc", 3);
+    let border = normalizeHexColor(palette.border, text);
 
-    if (contrastRatio(background, text) < 4.5) {
-      text = contrastRatio(background, "#111827") >= contrastRatio(background, "#ffffff") ? "#111827" : "#ffffff";
-    }
-
-    if (contrastRatio(background, link) < 3) {
-      link = contrastRatio(background, "#0645ad") >= contrastRatio(background, "#7dd3fc") ? "#0645ad" : "#7dd3fc";
-    }
-
-    if (contrastRatio(background, border) < 3) {
+    if (contrastRatio(background, border) < 3 || contrastRatio(surface, border) < 3) {
       border = text;
     }
 
@@ -870,19 +864,83 @@
   }
 
   function resolveFocusColors(focus) {
-    const background = focus.background || "#ffffff";
-    let text = focus.text || "#111827";
-    let link = focus.link || "#0645ad";
-
-    if (contrastRatio(background, text) < 4.5) {
-      text = contrastRatio(background, "#111827") >= contrastRatio(background, "#ffffff") ? "#111827" : "#ffffff";
-    }
-
-    if (contrastRatio(background, link) < 3) {
-      link = contrastRatio(background, "#0645ad") >= contrastRatio(background, "#7dd3fc") ? "#0645ad" : "#7dd3fc";
-    }
+    const background = normalizeHexColor(focus.background, "#ffffff");
+    const text = getReadableColor(background, focus.text, "#111827", "#ffffff", 4.5);
+    const link = getReadableColor(background, focus.link, "#0645ad", "#7dd3fc", 3);
 
     return { background, text, link };
+  }
+
+  function getReadableSurface(background, preferredSurface, text, link) {
+    const surface = normalizeHexColor(preferredSurface, background);
+    if (isReadableSurface(surface, text, link)) {
+      return surface;
+    }
+
+    const candidates = uniqueColors([
+      background,
+      "#050505",
+      "#111827",
+      "#f3f4f6",
+      "#ffffff"
+    ]);
+    return candidates.find((candidate) => isReadableSurface(candidate, text, link)) || background;
+  }
+
+  function isReadableSurface(surface, text, link) {
+    return contrastRatio(surface, text) >= 4.5 && contrastRatio(surface, link) >= 3;
+  }
+
+  function getReadableColor(background, preferred, darkFallback, lightFallback, minimumRatio) {
+    const safeBackground = normalizeHexColor(background, "#ffffff");
+    const candidates = uniqueColors([
+      preferred,
+      darkFallback,
+      "#000000",
+      "#111827",
+      "#1f2937",
+      lightFallback,
+      "#f8fafc",
+      "#ffffff"
+    ]);
+    const readable = candidates.find((candidate) => contrastRatio(safeBackground, candidate) >= minimumRatio);
+    if (readable) {
+      return readable;
+    }
+
+    return candidates.reduce((best, candidate) => (
+      contrastRatio(safeBackground, candidate) > contrastRatio(safeBackground, best) ? candidate : best
+    ), candidates[0] || "#ffffff");
+  }
+
+  function uniqueColors(colors) {
+    const seen = new Set();
+    return colors
+      .map(toHexColor)
+      .filter(Boolean)
+      .filter((color) => {
+        if (seen.has(color)) {
+          return false;
+        }
+
+        seen.add(color);
+        return true;
+      });
+  }
+
+  function normalizeHexColor(color, fallback) {
+    return toHexColor(color) || toHexColor(fallback) || "#ffffff";
+  }
+
+  function toHexColor(color) {
+    const text = String(color || "").trim();
+    const shortMatch = text.match(/^#?([0-9a-f]{3})$/i);
+    if (shortMatch) {
+      return `#${shortMatch[1].split("").map((character) => character + character).join("").toLowerCase()}`;
+    }
+
+    const fullMatch = text.match(/^#?([0-9a-f]{6})$/i);
+    return fullMatch ? `#${fullMatch[1].toLowerCase()}` : "";
   }
 
   function getReaderChromeColors(focusColors) {
@@ -908,7 +966,7 @@
   }
 
   function hexToRgb(color) {
-    const normalized = String(color || "").replace("#", "").trim();
+    const normalized = normalizeHexColor(color, "#ffffff").replace("#", "");
     const full = normalized.length === 3
       ? normalized.split("").map((character) => character + character).join("")
       : normalized;

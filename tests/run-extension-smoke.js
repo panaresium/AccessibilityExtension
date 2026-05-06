@@ -333,6 +333,157 @@ async function getAccessiViewState(page) {
   }));
 }
 
+async function collectReadableColorChecks(page, checks) {
+  return page.evaluate((items) => {
+    function parseColor(value) {
+      const match = String(value || "").match(/^rgba?\(([^)]+)\)$/);
+      if (!match) {
+        return null;
+      }
+
+      const channels = match[1]
+        .split(/,\s*|\s+/)
+        .filter((part) => part && part !== "/")
+        .map((part) => part.endsWith("%") ? Number.parseFloat(part) * 2.55 : Number.parseFloat(part));
+
+      if (channels.length < 3 || channels.slice(0, 3).some((channel) => !Number.isFinite(channel))) {
+        return null;
+      }
+
+      return {
+        r: Math.round(channels[0]),
+        g: Math.round(channels[1]),
+        b: Math.round(channels[2]),
+        a: Number.isFinite(channels[3]) ? Math.min(Math.max(channels[3], 0), 1) : 1
+      };
+    }
+
+    function blend(top, bottom) {
+      const alpha = Math.min(Math.max(top.a, 0), 1);
+      return {
+        r: Math.round(top.r * alpha + bottom.r * (1 - alpha)),
+        g: Math.round(top.g * alpha + bottom.g * (1 - alpha)),
+        b: Math.round(top.b * alpha + bottom.b * (1 - alpha)),
+        a: 1
+      };
+    }
+
+    function luminance(color) {
+      const channels = [color.r, color.g, color.b].map((channel) => {
+        const value = channel / 255;
+        return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    }
+
+    function contrastRatio(first, second) {
+      const lighter = Math.max(luminance(first), luminance(second));
+      const darker = Math.min(luminance(first), luminance(second));
+      return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    function getCanvasColor() {
+      const rootColor = parseColor(getComputedStyle(document.documentElement).backgroundColor);
+      return rootColor && rootColor.a > 0.15 ? blend(rootColor, { r: 255, g: 255, b: 255, a: 1 }) : { r: 255, g: 255, b: 255, a: 1 };
+    }
+
+    function getReadableBackground(element) {
+      let current = element;
+      while (current && current.nodeType === Node.ELEMENT_NODE) {
+        const color = parseColor(getComputedStyle(current).backgroundColor);
+        if (color && color.a > 0.15) {
+          return blend(color, getCanvasColor());
+        }
+        current = current.parentElement || (current.getRootNode && current.getRootNode().host) || null;
+      }
+      return getCanvasColor();
+    }
+
+    return items.map((item) => {
+      const element = document.querySelector(item.selector);
+      if (!element) {
+        return Object.assign({}, item, { found: false, ratio: 0, readable: false });
+      }
+
+      const foreground = parseColor(getComputedStyle(element).color);
+      const background = getReadableBackground(element);
+      const ratio = foreground && background ? contrastRatio(foreground, background) : 0;
+      return Object.assign({}, item, {
+        found: true,
+        color: getComputedStyle(element).color,
+        background: `rgb(${background.r}, ${background.g}, ${background.b})`,
+        ratio,
+        readable: ratio >= item.minimum
+      });
+    });
+  }, checks);
+}
+
+async function validateReadableColorFallbacks(context, extensionPage, baseUrl) {
+  const badWhitePalette = {
+    background: "#ffffff",
+    surface: "#ffffff",
+    text: "#ffffff",
+    link: "#ffffff",
+    border: "#ffffff"
+  };
+
+  await setSettings(extensionPage, {
+    enabled: true,
+    modes: {
+      contrast: Object.assign({ enabled: true, preset: "custom" }, badWhitePalette)
+    }
+  });
+
+  const contrastPage = await context.newPage();
+  await contrastPage.goto(`${baseUrl}/form.html?colors=contrast`);
+  await contrastPage.waitForFunction(() => document.documentElement.classList.contains("av-mode-contrast"));
+  const contrastChecks = await collectReadableColorChecks(contrastPage, [
+    { mode: "contrast", selector: "body", minimum: 4.5 },
+    { mode: "contrast", selector: "input", minimum: 4.5 },
+    { mode: "contrast", selector: "button", minimum: 4.5 }
+  ]);
+  await contrastPage.close();
+
+  await setSettings(extensionPage, {
+    enabled: true,
+    modes: {
+      focus: { enabled: true, textOnly: false, background: "#ffffff", text: "#ffffff", link: "#ffffff" }
+    }
+  });
+
+  const focusPage = await context.newPage();
+  await focusPage.goto(`${baseUrl}/article.html?colors=focus`);
+  await focusPage.waitForFunction(() => document.querySelector("[data-av-main='true']"));
+  const focusChecks = await collectReadableColorChecks(focusPage, [
+    { mode: "focus", selector: "[data-av-main='true']", minimum: 4.5 },
+    { mode: "focus", selector: "[data-av-main='true'] a", minimum: 3 }
+  ]);
+  await focusPage.close();
+
+  await setSettings(extensionPage, {
+    enabled: true,
+    modes: {
+      simplify: { enabled: true, background: "#ffffff", text: "#ffffff", link: "#ffffff" }
+    }
+  });
+
+  const simplifyPage = await context.newPage();
+  await simplifyPage.goto(`${baseUrl}/article.html?colors=simplify`);
+  await simplifyPage.waitForFunction(() => document.querySelector("[data-av-simplify-main='true']"));
+  const simplifyChecks = await collectReadableColorChecks(simplifyPage, [
+    { mode: "simplify", selector: "[data-av-simplify-main='true']", minimum: 4.5 },
+    { mode: "simplify", selector: "[data-av-simplify-main='true'] a", minimum: 3 }
+  ]);
+  await simplifyPage.close();
+
+  const checks = contrastChecks.concat(focusChecks, simplifyChecks);
+  return {
+    checks,
+    allReadable: checks.every((check) => check.found && check.readable)
+  };
+}
+
 async function validateActiveTabMessageBridge(context, extensionPage, baseUrl) {
   const firstPage = await context.newPage();
   const secondPage = await context.newPage();
@@ -584,6 +735,7 @@ async function run() {
         cache: false
       }
     });
+    const readableColorResult = await validateReadableColorFallbacks(context, optionsPage, baseUrl);
 
     const popupPage = await context.newPage();
     await popupPage.goto(`chrome-extension://${extensionId}/popup.html`);
@@ -626,7 +778,7 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, focusReaderResult, formResult, formSummaryResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -685,6 +837,9 @@ async function run() {
     }
     if (formSummaryResult.ok || !String(formSummaryResult.message || "").includes("Summary is disabled")) {
       throw new Error("Sensitive form fixture failed summary privacy assertions.");
+    }
+    if (!readableColorResult.allReadable) {
+      throw new Error("Readable color fallback assertions failed for custom color settings.");
     }
     if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
       throw new Error("Popup fixture failed AccessiView assertions.");
