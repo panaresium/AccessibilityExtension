@@ -75,16 +75,32 @@
   }
 
   function queryActiveTab(callback) {
+    chrome.runtime.sendMessage({ type: "ACCESSIVIEW_GET_ACTIVE_TAB" }, (response) => {
+      const error = chrome.runtime.lastError;
+      if (!error && response && response.ok && response.tab) {
+        callback(response.tab);
+        return;
+      }
+
+      queryActiveTabFallback(callback);
+    });
+  }
+
+  function queryActiveTabFallback(callback) {
     chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
       const error = chrome.runtime.lastError;
-      if (!error && tabs && tabs[0]) {
-        callback(tabs[0]);
+      const tab = !error && tabs ? tabs.find((candidate) => isWebPageUrl(candidate.url)) : null;
+      if (tab) {
+        callback(tab);
         return;
       }
 
       chrome.tabs.query({ active: true, currentWindow: true }, (fallbackTabs) => {
         const fallbackError = chrome.runtime.lastError;
-        callback(fallbackError ? null : fallbackTabs && fallbackTabs[0] ? fallbackTabs[0] : null);
+        const fallbackTab = !fallbackError && fallbackTabs
+          ? fallbackTabs.find((candidate) => isWebPageUrl(candidate.url))
+          : null;
+        callback(fallbackTab || null);
       });
     });
   }
@@ -1179,26 +1195,39 @@
   }
 
   function sendMessageToActiveTab(message, callback) {
-    queryActiveTab((tab) => {
-      setCurrentTab(tab);
+    chrome.runtime.sendMessage({ type: "ACCESSIVIEW_SEND_TO_ACTIVE_TAB", payload: message }, (response) => {
+      const bridgeError = chrome.runtime.lastError;
+      if (!bridgeError && response) {
+        if (response.targetTab) {
+          setCurrentTab(response.targetTab);
+        }
 
-      if (!tab || !tab.id || !currentUrl) {
-        setStatus("Open a web page to test.");
         if (callback) {
-          callback({ ok: false });
+          callback(response);
         }
         return;
       }
 
-      chrome.tabs.sendMessage(tab.id, message, (response) => {
-        const error = chrome.runtime.lastError;
-        if (callback) {
-          callback(error ? { ok: false, message: error.message } : response || { ok: true });
+      queryActiveTab((tab) => {
+        setCurrentTab(tab);
+
+        if (!tab || !tab.id || !currentUrl) {
+          setStatus("Open a web page to test.");
+          if (callback) {
+            callback({ ok: false });
+          }
+          return;
         }
+
+        chrome.tabs.sendMessage(tab.id, message, (response) => {
+          const error = chrome.runtime.lastError;
+          if (callback) {
+            callback(error ? { ok: false, message: error.message } : response || { ok: true });
+          }
+        });
       });
     });
   }
-
   function setStatus(message) {
     const status = document.getElementById("status");
     status.textContent = message;

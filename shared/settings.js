@@ -543,6 +543,7 @@
       }
     }
   };
+  const UNSAFE_MERGE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
   function clone(value) {
     if (value === undefined) {
@@ -564,6 +565,10 @@
     }
 
     Object.keys(override).forEach((key) => {
+      if (UNSAFE_MERGE_KEYS.has(key)) {
+        return;
+      }
+
       if (isPlainObject(result[key]) && isPlainObject(override[key])) {
         result[key] = mergeDeep(result[key], override[key]);
       } else {

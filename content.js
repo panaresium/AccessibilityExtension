@@ -146,14 +146,103 @@
     ".entry-content",
     ".post-content",
     ".story-body",
+    ".results",
+    ".search-results",
+    ".result-list",
+    ".list",
+    ".feed",
+    ".stream",
+    ".cards",
+    ".items",
     ".content",
     "#content",
     "#main",
+    "[class*='article']",
+    "[class*='content']",
+    "[class*='result']",
+    "[class*='search']",
+    "[class*='feed']",
+    "[class*='stream']",
+    "[class*='card']",
+    "[class*='item']",
     "section",
     "div"
   ].join(",");
-  const READER_NEGATIVE_PATTERN = /\b(ad|ads|advert|app|banner|breadcrumb|comment|cookie|dialog|footer|game|games|header|hero|login|market|menu|modal|nav|newsletter|paywall|promo|quote|related|search|share|shopping|shortcut|sidebar|social|sponsor|stock|stripe|subscribe|ticker|toolbar|weather|widget)\b/i;
-  const READER_POSITIVE_PATTERN = /\b(article|body|content|entry|main|post|reader|story|text)\b/i;
+  const READER_NEGATIVE_PATTERN = /\b(ad|ads|advert|app|banner|breadcrumb|comment|cookie|dialog|footer|game|games|header|hero|login|market|menu|modal|nav|newsletter|paywall|promo|quote|related|share|shopping|shortcut|sidebar|social|sponsor|stock|stripe|subscribe|ticker|toolbar|weather|widget)\b/i;
+  const READER_POSITIVE_PATTERN = /\b(article|body|content|entry|feed|item|list|main|post|reader|result|results|search-results|story|stream|text)\b/i;
+  const READER_ITEM_SELECTOR = [
+    "article",
+    "[role='article']",
+    "[itemprop='articleBody']",
+    "[itemprop='blogPost']",
+    ".article",
+    ".entry",
+    ".post",
+    ".story",
+    ".result",
+    "[class*='result']",
+    ".card",
+    "[class*='card']",
+    ".item",
+    "[class*='item']",
+    ".tile",
+    "[class*='tile']",
+    ".media",
+    "li",
+    "section"
+  ].join(",");
+  const READER_BOILERPLATE_SELECTOR = [
+    "nav",
+    "footer",
+    "aside",
+    "form",
+    "dialog",
+    "[role='banner']",
+    "[role='navigation']",
+    "[role='search']",
+    "[role='complementary']",
+    "[role='contentinfo']",
+    "[aria-label*='advert' i]",
+    "[aria-label*='promo' i]",
+    "[aria-label*='sponsor' i]",
+    "[data-ad]",
+    "[data-ad-slot]",
+    "[class~='ad' i]",
+    "[class^='ad-' i]",
+    "[class*=' ad-' i]",
+    "[class*='-ad ' i]",
+    "[class$='-ad' i]",
+    "[class*='advert' i]",
+    "[class*='breadcrumb' i]",
+    "[class*='comment' i]",
+    "[class*='cookie' i]",
+    "[class*='footer' i]",
+    "[class*='menu' i]",
+    "[class*='nav' i]",
+    "[class*='newsletter' i]",
+    "[class*='promo' i]",
+    "[class*='recommend' i]",
+    "[class*='related' i]",
+    "[class*='share' i]",
+    "[class*='sidebar' i]",
+    "[id='ad' i]",
+    "[id^='ad-' i]",
+    "[id$='-ad' i]",
+    "[id*='advert' i]",
+    "[id*='breadcrumb' i]",
+    "[id*='comment' i]",
+    "[id*='cookie' i]",
+    "[id*='footer' i]",
+    "[id*='menu' i]",
+    "[id*='nav' i]",
+    "[id*='newsletter' i]",
+    "[id*='promo' i]",
+    "[id*='recommend' i]",
+    "[id*='related' i]",
+    "[id*='share' i]",
+    "[id*='sidebar' i]"
+  ].join(",");
+  const READER_LIST_PATTERN = /\b(card|cards|feed|item|items|list|result|results|search-results|stream|timeline)\b/i;
   const FORM_CONTROL_SELECTOR = "input:not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']), select, textarea";
   const COGNITIVE_CLUTTER_PATTERN = /\b(ad|advert|banner|breadcrumb|comment|cookie|footer|menu|modal|nav|newsletter|promo|related|share|sidebar|social|sponsor|subscribe|ticker|toolbar|widget)\b/i;
   const SHADOW_STYLE_ID = "accessiview-shadow-style";
@@ -215,38 +304,128 @@
   let speechSessionId = 0;
   let speechPauseTimer = null;
   let activeSpeech = null;
+  let visibleRefreshTimer = null;
 
-  function boot() {
-    chrome.storage.sync.get(STORAGE_KEY, (syncResult) => {
+  function isExtensionContextError(error) {
+    return /Extension context invalidated|context invalidated/i.test(error && error.message || "");
+  }
+
+  function canUseExtensionApis() {
+    try {
+      return Boolean(chrome && chrome.runtime && chrome.runtime.id);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function safeChromeApi(action, fallback) {
+    if (!canUseExtensionApis()) {
+      if (fallback) {
+        fallback();
+      }
+      return false;
+    }
+
+    try {
+      action();
+      return true;
+    } catch (error) {
+      if (!isExtensionContextError(error)) {
+        throw error;
+      }
+
+      if (fallback) {
+        fallback(error);
+      }
+      return false;
+    }
+  }
+
+  function safeStorageGet(area, key, callback) {
+    return safeChromeApi(() => {
+      chrome.storage[area].get(key, callback);
+    }, () => callback({}));
+  }
+
+  function safeStorageSet(area, values, callback) {
+    return safeChromeApi(() => {
+      chrome.storage[area].set(values, callback);
+    }, () => {
+      if (callback) {
+        callback();
+      }
+    });
+  }
+
+  function safeRuntimeSendMessage(message, callback) {
+    return safeChromeApi(() => {
+      chrome.runtime.sendMessage(message, callback);
+    }, () => {
+      if (callback) {
+        callback({ ok: false, message: "Extension was reloaded. Reload this page to reconnect AccessiView." });
+      }
+    });
+  }
+
+  function refreshStoredSettingsAndApply() {
+    safeStorageGet("sync", STORAGE_KEY, (syncResult) => {
       globalSettings = withDefaults(syncResult[STORAGE_KEY]);
-      chrome.storage.local.get(SITE_STORAGE_KEY, (localResult) => {
+      safeStorageGet("local", SITE_STORAGE_KEY, (localResult) => {
         siteStore = withSiteStore(localResult[SITE_STORAGE_KEY]);
         refreshEffectiveSettings();
       });
     });
+  }
 
-    chrome.storage.onChanged.addListener((changes, area) => {
-      let shouldRefresh = false;
+  function scheduleCurrentTabSettingsRefresh() {
+    clearTimeout(visibleRefreshTimer);
+    visibleRefreshTimer = setTimeout(() => {
+      visibleRefreshTimer = null;
+      safeRuntimeSendMessage({ type: "ACCESSIVIEW_IS_CURRENT_TAB" }, (response) => {
+        if (response && response.isCurrent) {
+          refreshStoredSettingsAndApply();
+        }
+      });
+    }, 40);
+  }
 
+  function applyCurrentSettingsWhenVisible() {
+    if (document.visibilityState === "hidden") {
+      return;
+    }
+
+    safeRuntimeSendMessage({ type: "ACCESSIVIEW_IS_CURRENT_TAB" }, (response) => {
+      if (response && response.isCurrent) {
+        refreshStoredSettingsAndApply();
+      }
+    });
+  }
+
+  function watchCurrentTabSettingsRefresh() {
+    document.addEventListener("visibilitychange", applyCurrentSettingsWhenVisible);
+    window.addEventListener("focus", scheduleCurrentTabSettingsRefresh);
+    window.addEventListener("pageshow", scheduleCurrentTabSettingsRefresh);
+  }
+
+  function boot() {
+    refreshStoredSettingsAndApply();
+
+    safeChromeApi(() => chrome.storage.onChanged.addListener((changes, area) => {
       if (area === "sync" && changes[STORAGE_KEY]) {
         globalSettings = withDefaults(changes[STORAGE_KEY].newValue);
-        shouldRefresh = true;
       }
 
       if (area === "local" && changes[SITE_STORAGE_KEY]) {
         siteStore = withSiteStore(changes[SITE_STORAGE_KEY].newValue);
-        shouldRefresh = true;
       }
 
-      if (!shouldRefresh) {
-        return;
-      }
+      scheduleCurrentTabSettingsRefresh();
+    }));
 
-      refreshEffectiveSettings();
-    });
+    watchCurrentTabSettingsRefresh();
 
     if (IS_TOP_FRAME) {
-      chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      safeChromeApi(() => chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (!message || !message.type) {
           return false;
         }
@@ -371,7 +550,7 @@
         }
 
         return false;
-      });
+      }));
     }
   }
 
@@ -1421,6 +1600,7 @@ html.av-guide-line #accessiview-reading-guide {
     }
 
     const candidates = queryAllAcrossRoots(READER_CANDIDATE_SELECTOR)
+      .filter((element) => !isAccessiViewHost(element))
       .filter(isVisibleContent)
       .filter((element) => !isLikelyReaderBoilerplate(element))
       .map((element) => ({ element, score: scoreReaderCandidate(element) }))
@@ -1439,7 +1619,7 @@ html.av-guide-line #accessiview-reading-guide {
     const candidates = [];
     rule.mainSelectors.forEach((selector) => {
       queryAllAcrossRoots(selector).forEach((element) => {
-        if (!element || element === document.documentElement || !isVisibleContent(element)) {
+        if (!element || element === document.documentElement || isAccessiViewHost(element) || !isVisibleContent(element)) {
           return;
         }
 
@@ -1469,12 +1649,76 @@ html.av-guide-line #accessiview-reading-guide {
   }
 
   function getTextLength(element) {
-    return (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim().length;
+    return getNormalizedElementText(element).length;
+  }
+
+  function getNormalizedElementText(element) {
+    return (element && (element.innerText || element.textContent) || "").replace(/\s+/g, " ").trim();
+  }
+
+  function getTopLevelDescendants(element, selector) {
+    if (!element || !element.querySelectorAll) {
+      return [];
+    }
+
+    const topLevel = [];
+    Array.from(element.querySelectorAll(selector)).forEach((candidate) => {
+      if (candidate !== element && !topLevel.some((other) => other.contains(candidate))) {
+        topLevel.push(candidate);
+      }
+    });
+
+    return topLevel;
+  }
+
+  function getDescendantTextLength(element, selector) {
+    return getTopLevelDescendants(element, selector).reduce((total, candidate) => {
+      if (!isVisibleReaderElement(candidate)) {
+        return total;
+      }
+
+      return total + getTextLength(candidate);
+    }, 0);
+  }
+
+  function getUsefulItemMetrics(element) {
+    return getTopLevelDescendants(element, READER_ITEM_SELECTOR).reduce((metrics, item) => {
+      if (!isVisibleReaderElement(item) || isLikelyReaderBoilerplate(item)) {
+        return metrics;
+      }
+
+      const textLength = getTextLength(item);
+      if (textLength < 70 || textLength > 2600) {
+        return metrics;
+      }
+
+      const hasContentCue = Boolean(item.querySelector("h1,h2,h3,h4,[role='heading'],p,blockquote,li,a"));
+      const linkTextLength = Array.from(item.querySelectorAll("a")).reduce((sum, link) => sum + getTextLength(link), 0);
+      const linkDensity = textLength ? linkTextLength / textLength : 1;
+
+      if (!hasContentCue || (linkDensity > 0.92 && textLength < 260)) {
+        return metrics;
+      }
+
+      metrics.count += 1;
+      metrics.textLength += Math.min(textLength, 700);
+      return metrics;
+    }, { count: 0, textLength: 0 });
   }
 
   function scoreReaderCandidate(element) {
-    const text = (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
+    const text = getNormalizedElementText(element);
     const textLength = text.length;
+    if (!textLength) {
+      return -1000;
+    }
+
+    const descriptor = getElementDescriptor(element);
+    const itemMetrics = getUsefulItemMetrics(element);
+    const isListLike = READER_LIST_PATTERN.test(descriptor) || itemMetrics.count >= 3;
+    const boilerplateTextLength = Math.min(getDescendantTextLength(element, READER_BOILERPLATE_SELECTOR), textLength);
+    const usefulTextLength = Math.max(0, textLength - boilerplateTextLength);
+    const boilerplateRatio = textLength ? boilerplateTextLength / textLength : 0;
     const linkTextLength = Array.from(element.querySelectorAll("a")).reduce((sum, link) => {
       return sum + getTextLength(link);
     }, 0);
@@ -1482,15 +1726,17 @@ html.av-guide-line #accessiview-reading-guide {
     const paragraphCount = element.querySelectorAll("p").length;
     const headingCount = element.querySelectorAll("h1,h2,h3").length;
     const mediaCount = element.querySelectorAll(FOCUS_MEDIA_SELECTOR).length;
-    const formCount = element.querySelectorAll("form,input,select,textarea,button").length;
+    const formControlCount = element.querySelectorAll("form,input,select,textarea").length;
+    const buttonCount = element.querySelectorAll("button").length;
     const punctuationCount = (text.match(/[.!?。！？]/g) || []).length;
-    const descriptor = getElementDescriptor(element);
     const titleRelevance = scoreTitleRelevance(text, document.title);
-    let score = Math.min(textLength, 8000);
+    let score = Math.min(usefulTextLength || textLength, 9000);
 
     score += paragraphCount * 220;
     score += headingCount * 80;
     score += punctuationCount * 25;
+    score += Math.min(itemMetrics.count, 16) * (isListLike ? 260 : 140);
+    score += Math.min(itemMetrics.textLength, 4200) * 0.25;
     score += titleRelevance;
 
     if (element.matches("article,[itemprop='articleBody']")) {
@@ -1498,7 +1744,7 @@ html.av-guide-line #accessiview-reading-guide {
     }
 
     if (element.matches("main,[role='main']")) {
-      score += 500;
+      score += 700;
     }
 
     if (READER_POSITIVE_PATTERN.test(descriptor)) {
@@ -1509,11 +1755,13 @@ html.av-guide-line #accessiview-reading-guide {
       score -= 1400;
     }
 
-    score -= linkDensity * 2500;
-    score -= mediaCount * 30;
-    score -= formCount * 180;
+    score -= linkDensity * (isListLike ? 850 : 2500);
+    score -= boilerplateRatio * (isListLike ? 900 : 1900);
+    score -= mediaCount * (isListLike ? 12 : 30);
+    score -= formControlCount * 180;
+    score -= buttonCount * (isListLike ? 12 : 60);
 
-    if (paragraphCount === 0 && textLength > 1200) {
+    if (paragraphCount === 0 && itemMetrics.count < 3 && textLength > 1200) {
       score -= 650;
     }
 
@@ -2383,11 +2631,11 @@ html.av-guide-line #accessiview-reading-guide {
 
     if (usingSiteSettings) {
       const nextSiteStore = upsertSiteSettings(siteStore, window.location.href, nextSettings);
-      chrome.storage.local.set({ [SITE_STORAGE_KEY]: nextSiteStore });
+      safeStorageSet("local", { [SITE_STORAGE_KEY]: nextSiteStore });
       return;
     }
 
-    chrome.storage.sync.set({ [STORAGE_KEY]: nextSettings });
+    safeStorageSet("sync", { [STORAGE_KEY]: nextSettings });
   }
 
   function removeFocusReaderOverlay() {
@@ -2667,18 +2915,39 @@ html.av-guide-line #accessiview-reading-guide {
   }
 
   function markSimplifyContent() {
-    clearSimplifyMarks(false);
-    const main = findMainContent();
-    if (!main) {
-      return;
+    const root = document.documentElement;
+    const hadSimplifyClass = root.classList.contains("av-mode-simplify");
+
+    if (hadSimplifyClass) {
+      root.classList.remove("av-mode-simplify");
     }
 
-    markElementChain(main, "data-av-simplify-main", "data-av-simplify-chain");
-    markSimplifyHiddenCandidates(main);
+    try {
+      clearSimplifyMarks(false);
+      const main = findMainContent();
+      if (!main) {
+        return;
+      }
+
+      markElementChain(main, "data-av-simplify-main", "data-av-simplify-chain");
+      markSimplifyHiddenCandidates(main);
+    } finally {
+      if (hadSimplifyClass) {
+        root.classList.add("av-mode-simplify");
+      }
+    }
   }
 
   function markElementChain(element, mainAttribute, chainAttribute) {
     element.setAttribute(mainAttribute, "true");
+    if (element === document.body) {
+      Array.from(document.body.children).forEach((child) => {
+        if (!isAccessiViewHost(child)) {
+          child.setAttribute(chainAttribute, "true");
+        }
+      });
+    }
+
     let current = element;
 
     while (current && current !== document.body) {
@@ -2707,33 +2976,48 @@ html.av-guide-line #accessiview-reading-guide {
       });
     }
 
-    main.querySelectorAll("nav,[role='navigation'],aside,[role='complementary'],form,[class],[id],[role]").forEach((element) => {
-      if (element === main || element.hasAttribute("data-av-simplify-main")) {
+    main.querySelectorAll(`${READER_BOILERPLATE_SELECTOR},nav,[role='navigation'],aside,[role='complementary'],form,[class],[id],[role]`).forEach((element) => {
+      if (element === main || element.hasAttribute("data-av-simplify-main") || isAccessiViewHost(element)) {
         return;
       }
 
-      const descriptor = getElementDescriptor(element);
-      const role = (element.getAttribute("role") || "").toLowerCase();
-
-      if (role === "navigation" || element.tagName === "NAV" || /\b(nav|menu|breadcrumb|toolbar|search)\b/i.test(descriptor)) {
-        element.setAttribute("data-av-simplify-hidden", "nav");
-        return;
-      }
-
-      if (role === "complementary" || element.tagName === "ASIDE" || /\b(sidebar|related|recommend|widget|promo|advert|ad)\b/i.test(descriptor)) {
-        element.setAttribute("data-av-simplify-hidden", "sidebar");
-        return;
-      }
-
-      if (element.tagName === "FORM" || /\b(form|newsletter|subscribe|login|signup)\b/i.test(descriptor)) {
-        element.setAttribute("data-av-simplify-hidden", "form");
-        return;
-      }
-
-      if (/\b(comment|discussion|reply|social|share)\b/i.test(descriptor)) {
-        element.setAttribute("data-av-simplify-hidden", "comment");
+      const reason = getSimplifyHiddenReason(element);
+      if (reason) {
+        element.setAttribute("data-av-simplify-hidden", reason);
       }
     });
+  }
+
+  function getSimplifyHiddenReason(element) {
+    const descriptor = getElementDescriptor(element);
+    const role = (element.getAttribute("role") || "").toLowerCase();
+    const tagName = element.tagName;
+
+    if (role === "dialog" || tagName === "DIALOG" || /\b(cookie|modal|popup)\b/i.test(descriptor)) {
+      return "rule";
+    }
+
+    if (tagName === "FORM" || /\b(form|newsletter|subscribe|login|signup|search-form|site-search)\b/i.test(descriptor)) {
+      return "form";
+    }
+
+    if (role === "navigation" || role === "search" || role === "banner" || tagName === "NAV" || /\b(nav|menu|breadcrumb|toolbar)\b/i.test(descriptor)) {
+      return "nav";
+    }
+
+    if (tagName === "HEADER" && !element.closest("article")) {
+      return "nav";
+    }
+
+    if (role === "complementary" || tagName === "ASIDE" || /\b(sidebar|related|recommend|widget|promo|advert|ad|sponsor|sponsored)\b/i.test(descriptor)) {
+      return "sidebar";
+    }
+
+    if (/\b(comment|discussion|reply|social|share)\b/i.test(descriptor)) {
+      return "comment";
+    }
+
+    return "";
   }
 
   function clearSimplifyMarks(stopObserver = true) {
@@ -4403,7 +4687,7 @@ html.av-guide-line #accessiview-reading-guide {
 
   function handleQuickAction(action) {
     if (action === "panel") {
-      chrome.runtime.sendMessage({ type: "ACCESSIVIEW_OPEN_SIDE_PANEL" }, () => {
+      safeRuntimeSendMessage({ type: "ACCESSIVIEW_OPEN_SIDE_PANEL" }, () => {
         renderQuickButton(false);
       });
       return;
@@ -4430,11 +4714,11 @@ html.av-guide-line #accessiview-reading-guide {
   function saveQuickSettings(nextSettings) {
     if (usingSiteSettings) {
       const nextSiteStore = upsertSiteSettings(siteStore, window.location.href, nextSettings);
-      chrome.storage.local.set({ [SITE_STORAGE_KEY]: nextSiteStore });
+      safeStorageSet("local", { [SITE_STORAGE_KEY]: nextSiteStore });
       return;
     }
 
-    chrome.storage.sync.set({ [STORAGE_KEY]: nextSettings });
+    safeStorageSet("sync", { [STORAGE_KEY]: nextSettings });
   }
 
   function removeQuickButton() {
@@ -4547,7 +4831,7 @@ html.av-guide-line #accessiview-reading-guide {
       mainSelector: selector
     });
 
-    chrome.storage.local.set({ [SITE_STORAGE_KEY]: siteStore }, () => {
+    safeStorageSet("local", { [SITE_STORAGE_KEY]: siteStore }, () => {
       renderContentPickerOverlay(`Saved "${label}" as the main content area.`);
       stopContentPickerListeners();
       refreshEffectiveSettings();
@@ -5085,7 +5369,7 @@ html.av-guide-line #accessiview-reading-guide {
 
   async function getCachedSummary(key) {
     return new Promise((resolve) => {
-      chrome.storage.local.get(SUMMARY_CACHE_KEY, (result) => {
+      safeStorageGet("local", SUMMARY_CACHE_KEY, (result) => {
         const cache = withSummaryCache(result[SUMMARY_CACHE_KEY]);
         const entry = cache.entries[key];
         if (!entry) {
@@ -5094,14 +5378,14 @@ html.av-guide-line #accessiview-reading-guide {
         }
 
         cache.entries[key].lastUsed = new Date().toISOString();
-        chrome.storage.local.set({ [SUMMARY_CACHE_KEY]: cache }, () => resolve(entry));
+        safeStorageSet("local", { [SUMMARY_CACHE_KEY]: cache }, () => resolve(entry));
       });
     });
   }
 
   async function cacheSummary(key, response) {
     return new Promise((resolve) => {
-      chrome.storage.local.get(SUMMARY_CACHE_KEY, (result) => {
+      safeStorageGet("local", SUMMARY_CACHE_KEY, (result) => {
         const cache = upsertSummaryCache(withSummaryCache(result[SUMMARY_CACHE_KEY]), key, {
           summary: response.summary,
           method: response.method,
@@ -5110,7 +5394,7 @@ html.av-guide-line #accessiview-reading-guide {
           title: response.title,
           url: response.url
         });
-        chrome.storage.local.set({ [SUMMARY_CACHE_KEY]: cache }, resolve);
+        safeStorageSet("local", { [SUMMARY_CACHE_KEY]: cache }, resolve);
       });
     });
   }

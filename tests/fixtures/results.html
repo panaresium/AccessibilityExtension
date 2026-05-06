@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Quantum computing search results - AccessiView Fixture</title>
+    <style>
+      body {
+        margin: 0;
+        color: #1f2937;
+        background: #f4f5f7;
+        font-family: Arial, sans-serif;
+      }
+
+      .site-header,
+      .site-nav,
+      .site-footer,
+      .ad-slot,
+      .related-panel,
+      .newsletter-form {
+        padding: 14px;
+        background: #e5e7eb;
+      }
+
+      #app-shell {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        gap: 24px;
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .search-results {
+        background: #ffffff;
+        padding: 22px;
+      }
+
+      .result-card {
+        border-bottom: 1px solid #d1d5db;
+        padding: 16px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">Product header and account tools</header>
+    <nav class="site-nav" aria-label="Site navigation">
+      <a href="#results">Skip to results</a>
+      <a href="/news">News</a>
+      <a href="/shopping">Shopping</a>
+    </nav>
+    <div id="app-shell" class="app search-layout">
+      <main id="results" class="search-results content-area" role="main">
+        <form class="search-form" role="search">
+          <label for="query">Search query</label>
+          <input id="query" value="quantum computing">
+          <button>Search</button>
+        </form>
+        <h1>Search results for quantum computing</h1>
+        <article class="result-card">
+          <h2><a href="/result-one">Quantum computing research overview</a></h2>
+          <p>Researchers explain quantum bits, error correction, and practical limits for near-term systems. This result provides a readable summary with definitions and current examples for learners.</p>
+        </article>
+        <article class="result-card">
+          <h2><a href="/result-two">How quantum algorithms are used</a></h2>
+          <p>Algorithms such as Grover search and Shor factoring show where quantum computers can differ from classical computers. The article compares theory, hardware needs, and realistic timelines.</p>
+        </article>
+        <article class="result-card">
+          <h2><a href="/result-three">Quantum hardware platforms compared</a></h2>
+          <p>This guide compares superconducting circuits, trapped ions, photonic processors, and neutral atoms. Each section lists strengths, tradeoffs, and the engineering challenges that affect adoption.</p>
+        </article>
+        <section class="related-panel">
+          <h2>Related searches</h2>
+          <a href="/related-one">quantum cryptography</a>
+          <a href="/related-two">quantum software jobs</a>
+        </section>
+        <form class="newsletter-form">
+          <label for="email">Get updates</label>
+          <input id="email" type="email">
+          <button>Subscribe</button>
+        </form>
+      </main>
+      <aside class="sidebar related-panel">
+        <h2>Related topics</h2>
+        <p>Side content, promotions, and recommended pages should not drive the simplified page target.</p>
+      </aside>
+      <div class="ad-slot">Sponsored placement</div>
+    </div>
+    <footer class="site-footer">Footer links and legal notices</footer>
+  </body>
+</html>

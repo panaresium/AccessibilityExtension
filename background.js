@@ -7,7 +7,38 @@ if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || message.type !== "ACCESSIVIEW_OPEN_SIDE_PANEL") {
+  if (!message || !message.type) {
+    return false;
+  }
+
+  if (message.type === "ACCESSIVIEW_GET_ACTIVE_TAB") {
+    queryActiveWebTab((tab) => {
+      sendResponse({
+        ok: Boolean(tab),
+        tab: serializeTab(tab)
+      });
+    });
+    return true;
+  }
+
+  if (message.type === "ACCESSIVIEW_IS_CURRENT_TAB") {
+    const senderTabId = sender && sender.tab && sender.tab.id;
+    queryActiveWebTab((tab) => {
+      sendResponse({
+        ok: true,
+        isCurrent: Boolean(tab && senderTabId && tab.id === senderTabId),
+        tab: serializeTab(tab)
+      });
+    });
+    return true;
+  }
+
+  if (message.type === "ACCESSIVIEW_SEND_TO_ACTIVE_TAB") {
+    forwardMessageToActiveTab(message.payload, sendResponse);
+    return true;
+  }
+
+  if (message.type !== "ACCESSIVIEW_OPEN_SIDE_PANEL") {
     return false;
   }
 
@@ -25,6 +56,95 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     .catch((error) => sendResponse({ ok: false, message: error.message }));
   return true;
 });
+
+if (chrome.tabs && chrome.tabs.onActivated) {
+  chrome.tabs.onActivated.addListener(({ tabId }) => {
+    refreshTabSettings(tabId);
+  });
+}
+
+if (chrome.tabs && chrome.tabs.onUpdated) {
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === "complete" && tab && tab.active && isWebPageUrl(tab.url)) {
+      refreshTabSettings(tabId);
+    }
+  });
+}
+
+function isWebPageUrl(url) {
+  return /^https?:\/\//.test(url || "");
+}
+
+function serializeTab(tab) {
+  if (!tab) {
+    return null;
+  }
+
+  return {
+    id: tab.id,
+    url: tab.url || "",
+    title: tab.title || "",
+    windowId: tab.windowId
+  };
+}
+
+function queryActiveWebTab(callback) {
+  chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+    const error = chrome.runtime.lastError;
+    const tab = !error && tabs ? tabs.find((candidate) => isWebPageUrl(candidate.url)) : null;
+    if (tab) {
+      callback(tab);
+      return;
+    }
+
+    chrome.windows.getLastFocused({ populate: true }, (windowInfo) => {
+      const windowError = chrome.runtime.lastError;
+      if (windowError || !windowInfo || !Array.isArray(windowInfo.tabs)) {
+        callback(null);
+        return;
+      }
+
+      callback(windowInfo.tabs.find((candidate) => candidate.active && isWebPageUrl(candidate.url)) || null);
+    });
+  });
+}
+
+function forwardMessageToActiveTab(payload, sendResponse) {
+  if (!payload || !payload.type) {
+    sendResponse({ ok: false, message: "No AccessiView message was provided." });
+    return;
+  }
+
+  queryActiveWebTab((tab) => {
+    if (!tab || !tab.id) {
+      sendResponse({ ok: false, message: "Open a web page to test.", targetTab: null });
+      return;
+    }
+
+    chrome.tabs.sendMessage(tab.id, payload, (response) => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        sendResponse({ ok: false, message: error.message, targetTab: serializeTab(tab) });
+        return;
+      }
+
+      sendResponse(Object.assign({}, response || { ok: true }, {
+        targetTab: serializeTab(tab)
+      }));
+    });
+  });
+}
+
+function refreshTabSettings(tabId) {
+  if (!tabId) {
+    return;
+  }
+
+  chrome.tabs.sendMessage(tabId, { type: "ACCESSIVIEW_REFRESH_SETTINGS" }, () => {
+    // The activated tab may be a browser page or may not have the content script yet.
+    void chrome.runtime.lastError;
+  });
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   const config = globalThis.AccessiViewConfig;
