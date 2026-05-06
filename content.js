@@ -306,6 +306,8 @@
   let speechSessionId = 0;
   let speechPauseTimer = null;
   let activeSpeech = null;
+  let speechFocusedElement = null;
+  let speechFocusedElementTabindex = null;
   let visibleRefreshTimer = null;
 
   function isExtensionContextError(error) {
@@ -583,6 +585,7 @@
 
     if (!settings.enabled) {
       removeFocusReaderOverlay();
+      clearSpeechSourceFocus();
       removeSpeechHighlight();
       removeKeyboardMap();
       removeQuickButton();
@@ -1139,6 +1142,14 @@ html.av-enabled.av-mode-motion.av-reduce-scroll *::after {
   scroll-behavior: auto !important;
 }
 
+html.av-enabled [data-av-speech-current="true"] {
+  outline: 4px solid var(--av-link, #0f766e) !important;
+  outline-offset: 6px !important;
+  box-shadow: 0 0 0 8px rgba(245, 158, 11, 0.28) !important;
+  scroll-margin-top: 35vh !important;
+  scroll-margin-bottom: 35vh !important;
+}
+
 html.av-enabled.av-mode-focus:not(.av-focus-text-only) body > :not([data-av-main-chain]):not(#accessiview-reading-guide):not(#accessiview-style) {
   transition: opacity 160ms ease !important;
 }
@@ -1435,6 +1446,14 @@ html.av-guide-line #accessiview-reading-guide {
 :host-context(html.av-enabled.av-mode-motion.av-reduce-scroll) *::before,
 :host-context(html.av-enabled.av-mode-motion.av-reduce-scroll) *::after {
   scroll-behavior: auto !important;
+}
+
+:host-context(html.av-enabled) [data-av-speech-current="true"] {
+  outline: 4px solid var(--av-link, #0f766e) !important;
+  outline-offset: 6px !important;
+  box-shadow: 0 0 0 8px rgba(245, 158, 11, 0.28) !important;
+  scroll-margin-top: 35vh !important;
+  scroll-margin-bottom: 35vh !important;
 }
 
 :host-context(html.av-enabled.av-mode-focus.av-focus-text-only) img,
@@ -1964,8 +1983,9 @@ html.av-guide-line #accessiview-reading-guide {
 
   function extractReaderContent() {
     const source = findMainContent();
+    const titleElement = findReaderTitleElement(source);
     const title = isLikelyArticlePage()
-      ? normalizeReaderText(document.title) || findReaderTitle(source)
+      ? normalizeReaderText(document.title) || findReaderTitle(source, titleElement)
       : findReaderTitle(source);
     const articleRootBlocks = isLikelyArticlePage() ? collectArticleRootBlocks(title) : [];
     const blocks = articleRootBlocks.length
@@ -1982,6 +2002,7 @@ html.av-guide-line #accessiview-reading-guide {
       title,
       site: window.location.hostname || document.title || "Page",
       url: window.location.href,
+      titleElement,
       blocks: fallbackBlocks
     };
   }
@@ -2032,12 +2053,17 @@ html.av-guide-line #accessiview-reading-guide {
     });
   }
 
-  function findReaderTitle(source) {
-    const heading = source && source.querySelector
-      ? source.querySelector("h1, [role='heading'][aria-level='1'], h2")
-      : null;
+  function findReaderTitle(source, titleElement = null) {
+    const heading = titleElement || findReaderTitleElement(source);
     const text = normalizeReaderText(heading ? heading.innerText || heading.textContent : "");
     return text || normalizeReaderText(document.title) || "Readable page";
+  }
+
+  function findReaderTitleElement(source) {
+    const headingSelector = "h1, [role='heading'][aria-level='1'], h2";
+    return source && source.querySelector
+      ? source.querySelector(headingSelector)
+      : document.querySelector(headingSelector);
   }
 
   function collectReaderBlocks(source) {
@@ -2097,7 +2123,8 @@ html.av-guide-line #accessiview-reading-guide {
         type: getReaderBlockType(tagName),
         level: /^h[1-6]$/.test(tagName) ? Number(tagName.slice(1)) : null,
         text,
-        html: getReaderElementInlineHtml(element)
+        html: getReaderElementInlineHtml(element),
+        element
       });
     });
 
@@ -2152,6 +2179,7 @@ html.av-guide-line #accessiview-reading-guide {
           level: /^h[1-6]$/.test(tagName) ? Number(tagName.slice(1)) : null,
           text,
           html: getReaderElementInlineHtml(element),
+          element,
           top: rect.top + window.scrollY,
           left: rect.left + window.scrollX,
           length: text.length
@@ -2162,7 +2190,7 @@ html.av-guide-line #accessiview-reading-guide {
     return candidates
       .sort((first, second) => first.top - second.top || first.left - second.left || second.length - first.length)
       .slice(0, 160)
-      .map(({ type, level, text, html }) => ({ type, level, text, html }));
+      .map(({ type, level, text, html, element }) => ({ type, level, text, html, element }));
   }
 
   function collectFallbackTextBlocks(source) {
@@ -2182,7 +2210,7 @@ html.av-guide-line #accessiview-reading-guide {
       .map(normalizeReaderText)
       .filter((line) => line.length >= 35)
       .slice(0, 120)
-      .map((line) => ({ type: "paragraph", level: null, text: line }));
+      .map((line) => ({ type: "paragraph", level: null, text: line, element: source || document.body }));
   }
 
   function shouldSkipReaderElement(element) {
@@ -5182,6 +5210,7 @@ html.av-guide-line #accessiview-reading-guide {
     restoreScrollOverrides();
     stopShadowStyleObserver();
     removeKeyboardMap();
+    clearSpeechSourceFocus();
     removeSpeechHighlight();
     stopContentPicker(false);
     removeQuickButton();
@@ -5579,7 +5608,8 @@ html.av-guide-line #accessiview-reading-guide {
     }
 
     const selectedText = String(window.getSelection ? window.getSelection() : "").trim();
-    const items = selectedText ? getSpeechItemsFromText(selectedText) : getReadableSpeechItems();
+    const selectedTarget = selectedText ? getSelectionSpeechTarget() : null;
+    const items = selectedText ? getSpeechItemsFromText(selectedText, selectedTarget) : getReadableSpeechItems();
     const text = items.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim().slice(0, 24000);
 
     if (!text) {
@@ -5629,6 +5659,7 @@ html.av-guide-line #accessiview-reading-guide {
       speechPauseTimer = null;
     }
     activeSpeech = null;
+    clearSpeechSourceFocus();
     removeSpeechHighlight();
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -5657,6 +5688,7 @@ html.av-guide-line #accessiview-reading-guide {
     const chunks = activeSpeech.chunks;
     if (index < 0 || index >= chunks.length) {
       activeSpeech = null;
+      clearSpeechSourceFocus();
       removeSpeechHighlight();
       return;
     }
@@ -5665,6 +5697,7 @@ html.av-guide-line #accessiview-reading-guide {
     activeSpeech.paused = false;
     const sessionId = activeSpeech.sessionId;
     const chunk = chunks[index];
+    focusSpeechChunkSource(chunk, index);
     updateSpeechHighlight(chunk, index, chunks.length);
     const voice = getSpeechVoiceForChunk(activeSpeech.voices, chunk, activeSpeech.fallbackVoice);
     const language = voice ? voice.lang : chunk.language || activeSpeech.fallbackLanguage || "";
@@ -5685,7 +5718,7 @@ html.av-guide-line #accessiview-reading-guide {
 
       if (index >= chunks.length - 1) {
         activeSpeech = null;
-        queueNextSpeechChunk(sessionId, 120, removeSpeechHighlight);
+        queueNextSpeechChunk(sessionId, 120, finishSpeechPlayback);
         return;
       }
 
@@ -5698,7 +5731,7 @@ html.av-guide-line #accessiview-reading-guide {
 
       if (index >= chunks.length - 1) {
         activeSpeech = null;
-        queueNextSpeechChunk(sessionId, 80, removeSpeechHighlight);
+        queueNextSpeechChunk(sessionId, 80, finishSpeechPlayback);
         return;
       }
 
@@ -5724,6 +5757,7 @@ html.av-guide-line #accessiview-reading-guide {
 
     window.speechSynthesis.resume();
     activeSpeech.paused = false;
+    focusSpeechChunkSource(activeSpeech.chunks[activeSpeech.index], activeSpeech.index);
     return { ok: true, message: "Reading resumed.", status: getSpeechStatus() };
   }
 
@@ -5765,6 +5799,82 @@ html.av-guide-line #accessiview-reading-guide {
       total: activeSpeech.chunks.length,
       text: activeSpeech.chunks[activeSpeech.index] ? activeSpeech.chunks[activeSpeech.index].text : ""
     };
+  }
+
+  function finishSpeechPlayback() {
+    clearSpeechSourceFocus();
+    removeSpeechHighlight();
+  }
+
+  function focusSpeechChunkSource(chunk, index) {
+    const target = getSpeechChunkFocusTarget(chunk && chunk.element);
+    clearSpeechSourceFocus(target);
+    if (!target) {
+      return;
+    }
+
+    if (speechFocusedElement !== target) {
+      speechFocusedElement = target;
+      speechFocusedElementTabindex = target.getAttribute("tabindex");
+    }
+
+    target.setAttribute("data-av-speech-current", "true");
+    target.setAttribute("data-av-speech-current-index", String(index + 1));
+    if (!isSpeechFocusableElement(target) && !target.hasAttribute("tabindex")) {
+      target.setAttribute("tabindex", "-1");
+    }
+
+    try {
+      target.scrollIntoView({
+        block: "center",
+        inline: "nearest",
+        behavior: "auto"
+      });
+      target.focus({ preventScroll: true });
+    } catch (_error) {
+      try {
+        target.focus();
+      } catch (_focusError) {
+        // Some page-owned custom elements reject programmatic focus.
+      }
+    }
+  }
+
+  function clearSpeechSourceFocus(keepElement = null) {
+    if (!speechFocusedElement || speechFocusedElement === keepElement) {
+      return;
+    }
+
+    speechFocusedElement.removeAttribute("data-av-speech-current");
+    speechFocusedElement.removeAttribute("data-av-speech-current-index");
+    if (speechFocusedElementTabindex === null) {
+      speechFocusedElement.removeAttribute("tabindex");
+    } else {
+      speechFocusedElement.setAttribute("tabindex", speechFocusedElementTabindex);
+    }
+
+    speechFocusedElement = null;
+    speechFocusedElementTabindex = null;
+  }
+
+  function getSpeechChunkFocusTarget(element) {
+    let target = element && element.nodeType === Node.ELEMENT_NODE ? element : null;
+    while (target && target !== document.documentElement) {
+      if (!isAccessiViewHost(target) && isVisibleReaderElement(target)) {
+        return target;
+      }
+
+      target = target.parentElement || (target.getRootNode && target.getRootNode().host) || null;
+    }
+
+    return null;
+  }
+
+  function isSpeechFocusableElement(element) {
+    return Boolean(element && (
+      element.matches("a[href],button,input,select,textarea,summary,details,[contenteditable='true']") ||
+      element.hasAttribute("tabindex")
+    ));
   }
 
   function updateSpeechHighlight(chunk, index, total) {
@@ -5877,7 +5987,8 @@ html.av-guide-line #accessiview-reading-guide {
     const usefulItems = items
       .map((item) => ({
         type: item.type || "paragraph",
-        text: normalizeSpeechText(item.text)
+        text: normalizeSpeechText(item.text),
+        element: item.element || null
       }))
       .filter((item) => item.text.length >= 2)
       .slice(0, 260);
@@ -5894,6 +6005,7 @@ html.av-guide-line #accessiview-reading-guide {
             type: item.type,
             text: part.text,
             language: part.language,
+            element: item.element,
             pauseAfter: isLastPart ? getSpeechPause(item.type, isLastInItem) : 0
           });
         });
@@ -6087,11 +6199,15 @@ html.av-guide-line #accessiview-reading-guide {
     const items = [];
 
     if (readerContent.title) {
-      items.push({ type: "heading", text: readerContent.title });
+      items.push({
+        type: "heading",
+        text: readerContent.title,
+        element: readerContent.titleElement || (readerContent.blocks[0] && readerContent.blocks[0].element) || findMainContent()
+      });
     }
 
     readerContent.blocks.forEach((block) => {
-      items.push({ type: block.type || "paragraph", text: block.text });
+      items.push({ type: block.type || "paragraph", text: block.text, element: block.element || null });
     });
 
     const usefulLength = items.reduce((total, item) => total + normalizeSpeechText(item.text).length, 0);
@@ -6099,10 +6215,10 @@ html.av-guide-line #accessiview-reading-guide {
       return dedupeSpeechItems(items);
     }
 
-    return getSpeechItemsFromText(getReadableText());
+    return getSpeechItemsFromText(getReadableText(), findMainContent());
   }
 
-  function getSpeechItemsFromText(text) {
+  function getSpeechItemsFromText(text, element = null) {
     const normalized = normalizeSpeechText(text);
     if (!normalized) {
       return [];
@@ -6112,7 +6228,7 @@ html.av-guide-line #accessiview-reading-guide {
       .split(/\n{2,}|(?<=\.)\s{2,}/u)
       .map(normalizeSpeechText)
       .filter((part) => part.length >= 2)
-      .map((part) => ({ type: part.length <= 120 ? "paragraph" : "paragraph", text: part }));
+      .map((part) => ({ type: part.length <= 120 ? "paragraph" : "paragraph", text: part, element }));
   }
 
   function dedupeSpeechItems(items) {
@@ -6407,6 +6523,22 @@ html.av-guide-line #accessiview-reading-guide {
 
   function normalizeSpeechLanguage(language) {
     return String(language || "").trim().replace("_", "-").toLowerCase();
+  }
+
+  function getSelectionSpeechTarget() {
+    const selection = window.getSelection ? window.getSelection() : null;
+    if (!selection || !selection.rangeCount) {
+      return null;
+    }
+
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+    const element = container && container.nodeType === Node.ELEMENT_NODE ? container : container && container.parentElement;
+    if (!element) {
+      return null;
+    }
+
+    return element.closest("p,li,blockquote,pre,td,th,h1,h2,h3,h4,h5,h6,section,article,main") || element;
   }
 
   function getReadableText() {

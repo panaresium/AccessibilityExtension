@@ -46,6 +46,10 @@
       .printables-like-showcase a {
         color: #ffffff;
       }
+
+      .read-aloud-target {
+        margin-top: 900px;
+      }
     </style>
   </head>
   <body>
@@ -62,6 +66,7 @@
         <p class="low-contrast">This paragraph intentionally has poor contrast for the health scanner.</p>
         <p>This readable article body has enough text for reader extraction. It includes a <a href="/article.html#details">reader details link</a> so focus mode can keep useful links clickable. It includes several sentences so simplify mode, focus mode, and cognitive chunking can be tested with realistic content.</p>
         <p class="stubborn-same-color" style="color: #07111f !important; -webkit-text-fill-color: #07111f !important; background: #07111f !important;">This stubborn same-color paragraph simulates sites that use inline important styles on card text.</p>
+        <p id="read-aloud-deep-section" class="read-aloud-target">This deep read aloud section sits far enough down the page to verify that read aloud scrolls, focuses, and visibly marks the section currently being spoken.</p>
         <img src="missing-alt.png">
         <div class="ad-slot">Advertisement</div>
         <section class="share-box">Share this article</section>
