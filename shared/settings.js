@@ -8,6 +8,7 @@
   const MAX_PROFILES = 40;
   const MAX_HISTORY_ENTRIES = 16;
   const MAX_SUMMARY_CACHE_ENTRIES = 30;
+  const UNSAFE_MERGE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
   const DEFAULT_SETTINGS = {
     schemaVersion: 1,
@@ -564,6 +565,10 @@
     }
 
     Object.keys(override).forEach((key) => {
+      if (UNSAFE_MERGE_KEYS.has(key)) {
+        return;
+      }
+
       if (isPlainObject(result[key]) && isPlainObject(override[key])) {
         result[key] = mergeDeep(result[key], override[key]);
       } else {
