@@ -105,7 +105,8 @@
   const SIMPLIFY_OVERRIDE_SELECTOR = [
     "[data-av-simplify-main]",
     "[data-av-simplify-chain]",
-    "[data-av-simplify-hidden]"
+    "[data-av-simplify-hidden]",
+    "[data-av-simplify-color]"
   ].join(",");
   const FORM_HELPER_SELECTOR = [
     "[data-av-form-control]",
@@ -283,6 +284,7 @@
   let simplifyObserver = null;
   let simplifyObserverTimer = null;
   let simplifyObservedTargets = new WeakSet();
+  let simplifyStyleCache = new WeakMap();
   let formObserver = null;
   let formObservedTargets = new WeakSet();
   let cognitiveObserver = null;
@@ -2989,6 +2991,7 @@ html.av-guide-line #accessiview-reading-guide {
 
       markElementChain(main, "data-av-simplify-main", "data-av-simplify-chain");
       markSimplifyHiddenCandidates(main);
+      applySimplifyColorOverrides(main, resolveFocusColors(settings.modes.simplify));
     } finally {
       if (hadSimplifyClass) {
         root.classList.add("av-mode-simplify");
@@ -3078,17 +3081,112 @@ html.av-guide-line #accessiview-reading-guide {
     return "";
   }
 
+  function applySimplifyColorOverrides(main, simplifyColors) {
+    if (!main) {
+      return;
+    }
+
+    const targetSet = new Set([document.body, main]);
+    collectSimplifyColorTargets(main).forEach((element) => targetSet.add(element));
+    if (main !== document.body && document.body && document.body.hasAttribute("data-av-simplify-chain")) {
+      Array.from(document.body.children).forEach((child) => {
+        if (!isAccessiViewHost(child) && child.hasAttribute("data-av-simplify-chain")) {
+          targetSet.add(child);
+        }
+      });
+    }
+
+    targetSet.forEach((element) => {
+      if (shouldSkipSimplifyColorElement(element)) {
+        return;
+      }
+
+      cacheSimplifyStyle(element);
+      const readableColor = element.closest("a") ? simplifyColors.link : simplifyColors.text;
+      element.style.setProperty("color", readableColor, "important");
+      element.style.setProperty("-webkit-text-fill-color", readableColor, "important");
+      element.style.setProperty("caret-color", readableColor, "important");
+      element.style.setProperty("background-color", simplifyColors.background, "important");
+      element.style.setProperty("background-image", "none", "important");
+      element.style.setProperty("text-shadow", "none", "important");
+      element.style.setProperty("forced-color-adjust", "none", "important");
+    });
+  }
+
+  function collectSimplifyColorTargets(main) {
+    const targets = [];
+    const roots = getQueryableRoots();
+
+    if (document.body && document.body.querySelectorAll) {
+      targets.push(...Array.from(document.body.querySelectorAll("*")));
+    } else if (main.querySelectorAll) {
+      targets.push(...Array.from(main.querySelectorAll("*")));
+    }
+
+    roots.forEach((root) => {
+      if (root === document || !root.host) {
+        return;
+      }
+
+      const host = root.host;
+      if (isAccessiViewHost(host)) {
+        return;
+      }
+
+      if (main === document.body ||
+        main.contains(host) ||
+        (document.body && document.body.contains(host)) ||
+        host.hasAttribute("data-av-simplify-chain")) {
+        targets.push(host, ...Array.from(root.querySelectorAll("*")));
+      }
+    });
+
+    return targets;
+  }
+
+  function shouldSkipSimplifyColorElement(element) {
+    return !element ||
+      element.nodeType !== Node.ELEMENT_NODE ||
+      isAccessiViewHost(element) ||
+      FOCUS_COLOR_IGNORED_TAGS.has(element.tagName);
+  }
+
+  function cacheSimplifyStyle(element) {
+    if (!simplifyStyleCache.has(element)) {
+      simplifyStyleCache.set(element, element.getAttribute("style"));
+    }
+
+    element.setAttribute("data-av-simplify-color", "true");
+  }
+
   function clearSimplifyMarks(stopObserver = true) {
     getQueryableRoots().forEach((root) => {
       root.querySelectorAll(SIMPLIFY_OVERRIDE_SELECTOR).forEach((element) => {
+        restoreSimplifyElementStyle(element);
         element.removeAttribute("data-av-simplify-main");
         element.removeAttribute("data-av-simplify-chain");
         element.removeAttribute("data-av-simplify-hidden");
+        element.removeAttribute("data-av-simplify-color");
       });
     });
 
+    simplifyStyleCache = new WeakMap();
+
     if (stopObserver) {
       stopSimplifyObserver();
+    }
+  }
+
+  function restoreSimplifyElementStyle(element) {
+    if (!element.hasAttribute("data-av-simplify-color")) {
+      return;
+    }
+
+    const originalStyle = simplifyStyleCache.get(element);
+    if (typeof originalStyle === "string") {
+      element.setAttribute("style", originalStyle);
+    } else {
+      element.removeAttribute("style");
     }
   }
 

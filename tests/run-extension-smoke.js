@@ -405,12 +405,14 @@ async function collectReadableColorChecks(page, checks) {
         return Object.assign({}, item, { found: false, ratio: 0, readable: false });
       }
 
-      const foreground = parseColor(getComputedStyle(element).color);
+      const style = getComputedStyle(element);
+      const foreground = parseColor(style.webkitTextFillColor) || parseColor(style.color);
       const background = getReadableBackground(element);
       const ratio = foreground && background ? contrastRatio(foreground, background) : 0;
       return Object.assign({}, item, {
         found: true,
-        color: getComputedStyle(element).color,
+        color: style.color,
+        textFillColor: style.webkitTextFillColor,
         background: `rgb(${background.r}, ${background.g}, ${background.b})`,
         ratio,
         readable: ratio >= item.minimum
@@ -473,7 +475,10 @@ async function validateReadableColorFallbacks(context, extensionPage, baseUrl) {
   await simplifyPage.waitForFunction(() => document.querySelector("[data-av-simplify-main='true']"));
   const simplifyChecks = await collectReadableColorChecks(simplifyPage, [
     { mode: "simplify", selector: "[data-av-simplify-main='true']", minimum: 4.5 },
-    { mode: "simplify", selector: "[data-av-simplify-main='true'] a", minimum: 3 }
+    { mode: "simplify", selector: "[data-av-simplify-main='true'] a", minimum: 3 },
+    { mode: "simplify", selector: ".printables-like-showcase h2", minimum: 4.5 },
+    { mode: "simplify", selector: ".printables-like-showcase a", minimum: 3 },
+    { mode: "simplify", selector: ".stubborn-same-color", minimum: 4.5 }
   ]);
   await simplifyPage.close();
 

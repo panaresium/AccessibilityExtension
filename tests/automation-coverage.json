@@ -296,6 +296,7 @@
         { "id": "target", "name": "Target", "url": "https://www.target.com/" },
         { "id": "bestbuy", "name": "Best Buy", "url": "https://www.bestbuy.com/" },
         { "id": "etsy", "name": "Etsy", "url": "https://www.etsy.com/" },
+        { "id": "printables", "name": "Printables", "url": "https://www.printables.com/" },
         { "id": "shopify", "name": "Shopify", "url": "https://www.shopify.com/" },
         { "id": "costco", "name": "Costco", "url": "https://www.costco.com/" },
         { "id": "homedepot", "name": "The Home Depot", "url": "https://www.homedepot.com/" },
@@ -451,6 +452,15 @@
       "whyTest": "Search forms, product listings, filters, image grids, and repeated controls.",
       "recommendedCases": ["form-helper", "navigation-helpers", "contrast-and-text"],
       "automationNotes": "Do not bid, buy, sign in, or save listings."
+    },
+    {
+      "id": "printables",
+      "name": "Printables",
+      "url": "https://www.printables.com/",
+      "category": "shopping",
+      "whyTest": "Svelte marketplace homepage with dense model cards, carousels, badges, and mixed dark media surfaces that can expose Simplified Page color inheritance issues.",
+      "recommendedCases": ["simplify-main-content", "contrast-and-text", "navigation-helpers", "missing-alt-warnings"],
+      "automationNotes": "Use public pages only; do not sign in, download, like, collect, or upload models."
     },
     {
       "id": "reddit",
