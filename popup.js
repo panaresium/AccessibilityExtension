@@ -435,6 +435,8 @@
     renderVoiceControls();
     renderProfiles();
     renderUndoState();
+    renderAuditActions();
+    renderSummaryActions();
     schedulePageStatusRefresh();
     requestSpeechStatus();
   }
@@ -674,6 +676,7 @@
   function renderAuditRecommendations() {
     const list = document.getElementById("auditRecommendations");
     if (!list) {
+      renderAuditActions();
       return;
     }
 
@@ -688,6 +691,20 @@
       item.append(title, description);
       list.append(item);
     });
+    renderAuditActions();
+  }
+
+  function renderAuditActions() {
+    const button = document.getElementById("applyAuditFixes");
+    if (!button) {
+      return;
+    }
+
+    button.disabled = !(
+      currentAudit &&
+      Array.isArray(currentAudit.recommendations) &&
+      currentAudit.recommendations.length
+    );
   }
 
   function clearPageScopedOutputs() {
@@ -706,6 +723,7 @@
     if (summaryOutput) {
       summaryOutput.textContent = "";
     }
+    renderSummaryActions();
   }
 
   function inspectPageStructure() {
@@ -964,6 +982,7 @@
     status.textContent = "Summarizing locally...";
     output.textContent = "";
     currentSummary = null;
+    renderSummaryActions();
 
     sendMessageToActiveTab({
       type: "ACCESSIVIEW_SUMMARIZE_PAGE",
@@ -982,9 +1001,19 @@
 
       currentSummary = response.summary || "";
       output.textContent = currentSummary;
+      renderSummaryActions();
       const cacheLabel = response.cached ? " cached" : "";
       status.textContent = `${response.methodLabel || response.method || "Local"} summary${cacheLabel}. ${response.sourceLength || 0} characters read.`;
     });
+  }
+
+  function renderSummaryActions() {
+    const button = document.getElementById("readSummary");
+    if (!button) {
+      return;
+    }
+
+    button.disabled = !currentSummary;
   }
 
   function readCurrentSummary() {

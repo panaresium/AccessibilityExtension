@@ -752,6 +752,12 @@ async function run() {
       hasSpeechControls: Boolean(document.getElementById("pauseRead") && document.getElementById("nextRead")),
       hasSidePanelButton: Boolean(document.getElementById("openSidePanel")),
       hasSummaryControls: Boolean(document.getElementById("summarizePage") && document.getElementById("summaryOutput")),
+      disablesPrerequisiteActions: Boolean(
+        document.getElementById("applyAuditFixes") &&
+        document.getElementById("applyAuditFixes").disabled &&
+        document.getElementById("readSummary") &&
+        document.getElementById("readSummary").disabled
+      ),
       hasStructureControls: Boolean(document.getElementById("inspectStructure") && document.getElementById("inspectTabOrder") && document.getElementById("structureOutput")),
       hasNamedModeSwitches: (() => {
         const switches = Array.from(document.querySelectorAll(".toggle input[data-path$='.enabled']"));
@@ -846,7 +852,7 @@ async function run() {
     if (!readableColorResult.allReadable) {
       throw new Error("Readable color fallback assertions failed for custom color settings.");
     }
-    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
+    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.disablesPrerequisiteActions || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
       throw new Error("Popup fixture failed AccessiView assertions.");
     }
   } finally {
