@@ -99,6 +99,16 @@ The runner currently checks manifest wiring, reviewed extension permissions, uns
 
 `tests/automation-coverage.json` provides an automation-friendly feature test matrix, a category matrix with at least 20 public websites per category, and a curated catalog of common public websites for exploratory checks. Use it to plan broader AI-assisted browser testing, but keep live-site checks non-mutating: do not sign in, submit forms, post content, purchase items, or collect private data. Live website results should be treated as advisory because layouts, consent prompts, paywalls, and anti-automation behavior can change independently of the extension.
 
+## AI-Assisted Pre-PR Workflow
+
+Coding agents should follow `AGENTS.md` and `tests/ai-verification-policy.json` before publishing PRs. For code changes, the blocking gate is:
+
+```powershell
+npm run validate
+```
+
+Do not publish while deterministic checks fail. If a live website exposes a reproducible issue, capture the pattern in a local fixture, fix it, and rerun the blocking gate. Live-site checks from `tests/automation-coverage.json` are advisory and should remain public, non-mutating, and privacy-safe.
+
 ## Files
 
 - `manifest.json` defines the Chrome extension.
@@ -108,6 +118,8 @@ The runner currently checks manifest wiring, reviewed extension permissions, uns
 - `shared/settings.js` stores defaults, presets, profile helpers, and settings helpers.
 - `background.js` initializes default settings.
 - `tests/fixtures/*.html` and `tests/run-extension-smoke.js` provide local regression coverage.
+- `tests/ai-verification-policy.json` defines the coding-agent pre-PR verification policy.
+- `tests/pre-pr-verification.md` explains the deterministic and live-site verification workflow.
 - `tests/automation-coverage.json` lists recommended feature cases and common public website targets for broader exploratory automation.
 
 ## Notes

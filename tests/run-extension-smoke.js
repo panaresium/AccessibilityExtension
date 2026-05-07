@@ -135,6 +135,30 @@ function validateAutomationCoverage() {
   };
 }
 
+function validateAiVerificationPolicy() {
+  const policyPath = path.join(projectRoot, "tests", "ai-verification-policy.json");
+  const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+  const blockingCommands = Array.isArray(policy.blockingCommands) ? policy.blockingCommands : [];
+  const deterministicRules = Array.isArray(policy.deterministicBeforePrRules) ? policy.deterministicBeforePrRules : [];
+  const changeImpactRules = Array.isArray(policy.changeImpactRules) ? policy.changeImpactRules : [];
+  const liveSitePolicy = policy.liveSitePolicy || {};
+  const trackedPaths = new Set(changeImpactRules.flatMap((rule) => Array.isArray(rule.paths) ? rule.paths : []));
+
+  return {
+    schemaVersion: policy.schemaVersion,
+    hasValidateCommand: blockingCommands.includes("npm run validate"),
+    deterministicRuleCount: deterministicRules.length,
+    changeImpactRuleCount: changeImpactRules.length,
+    tracksCoreContent: trackedPaths.has("content.js") && trackedPaths.has("page-scroll.js") && trackedPaths.has("shared/settings.js"),
+    tracksExtensionUi: trackedPaths.has("popup.js") && trackedPaths.has("options.js"),
+    tracksManifest: trackedPaths.has("manifest.json") && trackedPaths.has("background.js"),
+    liveCatalogSource: liveSitePolicy.sourceCatalog,
+    liveChecksAreAdvisory: liveSitePolicy.blocksPr === false,
+    liveSafetyRuleCount: Array.isArray(liveSitePolicy.safetyRules) ? liveSitePolicy.safetyRules.length : 0,
+    failurePolicyCount: Array.isArray(policy.failurePolicy) ? policy.failurePolicy.length : 0
+  };
+}
+
 function getFunctionSource(source, name) {
   const start = source.indexOf(`function ${name}`);
   if (start === -1) {
@@ -584,6 +608,7 @@ async function validateActiveTabMessageBridge(context, extensionPage, baseUrl) {
 async function run() {
   const manifestResult = validateManifest();
   const automationCoverageResult = validateAutomationCoverage();
+  const aiVerificationPolicyResult = validateAiVerificationPolicy();
   const popupActiveTabTargetingResult = validatePopupActiveTabTargeting();
   const contentContextGuardResult = validateContentContextInvalidationGuards();
   const settingsMergeSafetyResult = validateSettingsMergeSafety();
@@ -833,7 +858,7 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, aiVerificationPolicyResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -850,6 +875,9 @@ async function run() {
     }
     if (!automationCoverageResult.includesRegionalCoverage || !automationCoverageResult.includesBuiltInRuleCoverage) {
       throw new Error("Automation coverage catalog is missing regional or built-in site-rule targets.");
+    }
+    if (aiVerificationPolicyResult.schemaVersion !== 1 || !aiVerificationPolicyResult.hasValidateCommand || aiVerificationPolicyResult.deterministicRuleCount < 5 || aiVerificationPolicyResult.changeImpactRuleCount < 4 || !aiVerificationPolicyResult.tracksCoreContent || !aiVerificationPolicyResult.tracksExtensionUi || !aiVerificationPolicyResult.tracksManifest || aiVerificationPolicyResult.liveCatalogSource !== "tests/automation-coverage.json" || !aiVerificationPolicyResult.liveChecksAreAdvisory || aiVerificationPolicyResult.liveSafetyRuleCount < 4 || aiVerificationPolicyResult.failurePolicyCount < 4) {
+      throw new Error("AI verification policy is missing required pre-PR rules.");
     }
     if (!popupActiveTabTargetingResult.hasActiveTabQueryFallback || !popupActiveTabTargetingResult.refreshesOnTabActivation || !popupActiveTabTargetingResult.refreshesMessageTargetBeforeSend || !popupActiveTabTargetingResult.opensSidePanelWithCurrentTabContext) {
       throw new Error("Popup active-tab targeting regression assertions failed.");

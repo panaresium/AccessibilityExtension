@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Pre-PR verification policy for coding agents changing AccessiView.",
+  "blockingCommands": [
+    "npm run validate"
+  ],
+  "deterministicBeforePrRules": [
+    "Run the blocking verification command after code changes and before publishing a PR.",
+    "Do not publish a PR while static checks, manifest checks, fixture smoke tests, privacy checks, color readability checks, or automation coverage assertions fail.",
+    "Fix failing deterministic checks, rerun them, and report the final command result.",
+    "Add or update a local fixture when fixing a live-site or layout-specific regression.",
+    "Keep browser extension permissions and content security policy unchanged unless the feature explicitly requires reviewed changes.",
+    "State any skipped relevant check and the reason before publishing."
+  ],
+  "changeImpactRules": [
+    {
+      "paths": ["manifest.json", "background.js"],
+      "requiredFocus": ["manifest-security", "extension-security", "active-tab-targeting", "service-worker-lifecycle"]
+    },
+    {
+      "paths": ["content.js", "page-scroll.js", "shared/settings.js"],
+      "requiredFocus": ["simplify-main-content", "focus-reader-overlay", "contrast-and-text", "reduce-motion", "form-helper", "cognitive-support", "local-summary", "shadow-dom-and-iframes"]
+    },
+    {
+      "paths": ["popup.html", "popup.css", "popup.js", "options.html", "options.css", "options.js"],
+      "requiredFocus": ["popup-options-regression", "navigation-helpers", "reading-guide-keyboard", "site-settings-and-picker"]
+    },
+    {
+      "paths": ["tests/run-extension-smoke.js", "tests/run-static-checks.js", "tests/fixtures", "tests/automation-coverage.json"],
+      "requiredFocus": ["test-infrastructure", "fixture-coverage", "automation-catalog-consistency"]
+    }
+  ],
+  "liveSitePolicy": {
+    "sourceCatalog": "tests/automation-coverage.json",
+    "blocksPr": false,
+    "minimumCategoriesForRelevantChanges": 1,
+    "minimumWebsitesPerRelevantCategory": 1,
+    "runWhen": [
+      "A change affects main-content detection, simplification, focus reader, motion handling, forms, summaries, popup active-tab routing, custom site rules, or built-in site rules.",
+      "A deterministic fixture was added because of a live-site regression.",
+      "A PR is large enough that one fixture class cannot represent the affected behavior."
+    ],
+    "safetyRules": [
+      "Use public pages that do not require login.",
+      "Do not submit forms, create accounts, purchase items, post content, or change user data.",
+      "Do not collect personal data, cookies, session tokens, page text dumps, or private screenshots.",
+      "Record consent prompts, paywalls, CAPTCHA, anti-automation blocks, and regional redirects as site conditions instead of deterministic failures."
+    ]
+  },
+  "failurePolicy": [
+    "Blocking command failure: fix before publishing.",
+    "Reproducible live-site extension regression: create or update a local fixture, fix the regression, and rerun blocking checks.",
+    "Live-site-only instability caused by external site behavior: report as advisory and do not block the PR by itself.",
+    "Unrun relevant check: state why it was skipped and what risk remains."
+  ]
+}
