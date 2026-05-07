@@ -247,6 +247,7 @@
   const FORM_CONTROL_SELECTOR = "input:not([type='hidden']):not([type='submit']):not([type='button']):not([type='reset']), select, textarea";
   const COGNITIVE_CLUTTER_PATTERN = /\b(ad|advert|banner|breadcrumb|comment|cookie|footer|menu|modal|nav|newsletter|promo|related|share|sidebar|social|sponsor|subscribe|ticker|toolbar|widget)\b/i;
   const SHADOW_STYLE_ID = "accessiview-shadow-style";
+  const PAGE_SPEECH_TEXT_LIMIT = 24000;
   const IS_TOP_FRAME = (() => {
     try {
       return window.self === window.top;
@@ -5609,8 +5610,11 @@ html.av-guide-line #accessiview-reading-guide {
 
     const selectedText = String(window.getSelection ? window.getSelection() : "").trim();
     const selectedTarget = selectedText ? getSelectionSpeechTarget() : null;
-    const items = selectedText ? getSpeechItemsFromText(selectedText, selectedTarget) : getReadableSpeechItems();
-    const text = items.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim().slice(0, 24000);
+    const rawItems = selectedText
+      ? getSpeechItemsFromText(selectedText, selectedTarget)
+      : getReadableSpeechItems();
+    const items = limitSpeechItems(rawItems, PAGE_SPEECH_TEXT_LIMIT);
+    const text = items.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim();
 
     if (!text) {
       return { ok: false, message: "No readable text found on this page." };
@@ -6229,6 +6233,33 @@ html.av-guide-line #accessiview-reading-guide {
       .map(normalizeSpeechText)
       .filter((part) => part.length >= 2)
       .map((part) => ({ type: part.length <= 120 ? "paragraph" : "paragraph", text: part, element }));
+  }
+
+  function limitSpeechItems(items, maxLength) {
+    const limited = [];
+    let remaining = maxLength;
+
+    items.some((item) => {
+      const text = normalizeSpeechText(item.text);
+      if (!text) {
+        return false;
+      }
+
+      if (text.length <= remaining) {
+        limited.push(Object.assign({}, item, { text }));
+        remaining -= text.length;
+        return remaining <= 0;
+      }
+
+      const truncated = text.slice(0, remaining).trim();
+      if (truncated) {
+        limited.push(Object.assign({}, item, { text: truncated }));
+      }
+      remaining = 0;
+      return true;
+    });
+
+    return limited;
   }
 
   function dedupeSpeechItems(items) {

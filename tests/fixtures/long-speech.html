@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>AccessiView Long Speech Fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>Long Speech Fixture</h1>
+      <div id="longSpeechContent"></div>
+    </main>
+    <script>
+      const container = document.getElementById("longSpeechContent");
+      const paragraphText = "This long speech regression paragraph has enough ordinary words to form a readable sentence for the local read aloud queue, while remaining harmless public fixture text for maintenance automation. It repeats consistent content so the test can verify that very long pages are capped before speech segments are queued.";
+      for (let index = 0; index < 120; index += 1) {
+        const paragraph = document.createElement("p");
+        paragraph.textContent = `${paragraphText} Segment ${index + 1}.`;
+        container.appendChild(paragraph);
+      }
+      document.documentElement.setAttribute("data-long-speech-ready", "true");
+    </script>
+  </body>
+</html>
