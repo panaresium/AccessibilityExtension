@@ -58,6 +58,18 @@ button:hover {
   border-color: var(--accent);
 }
 
+button:disabled {
+  color: var(--muted);
+  background: #eef1ea;
+  border-color: var(--border);
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+button:disabled:hover {
+  border-color: var(--border);
+}
+
 .popup-shell {
   display: grid;
   gap: 10px;

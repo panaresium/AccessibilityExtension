@@ -600,6 +600,15 @@ async function run() {
     const optionsResult = await optionsPage.evaluate(() => ({
       hasSummaryEngine: Boolean(document.querySelector("[data-path='summary.engine']")),
       hasSummaryCacheClear: Boolean(document.getElementById("clearSummaryCache")),
+      hasDisabledButtonStyle: (() => {
+        const button = document.getElementById("applyProfile");
+        if (!button || !button.disabled) {
+          return false;
+        }
+
+        const style = getComputedStyle(button);
+        return style.cursor === "not-allowed" && Number.parseFloat(style.opacity) < 1;
+      })(),
       hasReadableActivePresetDescription: (() => {
         const button = document.querySelector("[data-preset]");
         const description = button && button.querySelector("span");
@@ -758,6 +767,15 @@ async function run() {
         document.getElementById("readSummary") &&
         document.getElementById("readSummary").disabled
       ),
+      hasDisabledButtonStyle: (() => {
+        const button = document.getElementById("readSummary");
+        if (!button || !button.disabled) {
+          return false;
+        }
+
+        const style = getComputedStyle(button);
+        return style.cursor === "not-allowed" && Number.parseFloat(style.opacity) < 1;
+      })(),
       hasStructureControls: Boolean(document.getElementById("inspectStructure") && document.getElementById("inspectTabOrder") && document.getElementById("structureOutput")),
       hasNamedModeSwitches: (() => {
         const switches = Array.from(document.querySelectorAll(".toggle input[data-path$='.enabled']"));
@@ -834,7 +852,7 @@ async function run() {
     if (!tabOrderResult.ok || !tabOrderResult.tabOrder || tabOrderResult.tabOrder.counts.focusTargets < 1 || tabOrderResult.tabOrder.counts.missingNames !== 0 || !tabOrderResult.tabOrder.items[0].selector) {
       throw new Error("Tab order fixture failed AccessiView assertions.");
     }
-    if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear || !optionsResult.hasReadableActivePresetDescription) {
+    if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear || !optionsResult.hasDisabledButtonStyle || !optionsResult.hasReadableActivePresetDescription) {
       throw new Error("Options fixture failed summary control assertions.");
     }
     if (!summaryResult.ok || summaryResult.method !== "extractive" || !String(summaryResult.summary || "").includes("- ")) {
@@ -852,7 +870,7 @@ async function run() {
     if (!readableColorResult.allReadable) {
       throw new Error("Readable color fallback assertions failed for custom color settings.");
     }
-    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.disablesPrerequisiteActions || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
+    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.disablesPrerequisiteActions || !popupResult.hasDisabledButtonStyle || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
       throw new Error("Popup fixture failed AccessiView assertions.");
     }
   } finally {
