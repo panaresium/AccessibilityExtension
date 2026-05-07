@@ -563,6 +563,34 @@ async function validateReadAloudFocusNavigation(context, extensionPage, baseUrl)
   }
 }
 
+async function validateReadAloudPageLimit(context, extensionPage, baseUrl) {
+  const readPage = await context.newPage();
+  try {
+    await readPage.goto(`${baseUrl}/long-speech.html`);
+    await readPage.waitForSelector("[data-long-speech-ready='true']");
+
+    const startResponse = await sendMessageToFixture(extensionPage, "/long-speech.html", {
+      type: "ACCESSIVIEW_READ"
+    });
+    const statusResponse = await sendMessageToFixture(extensionPage, "/long-speech.html", {
+      type: "ACCESSIVIEW_GET_SPEECH_STATUS"
+    });
+    const stopResponse = await sendMessageToFixture(extensionPage, "/long-speech.html", {
+      type: "ACCESSIVIEW_STOP_READING"
+    });
+
+    return {
+      startOk: Boolean(startResponse && startResponse.ok),
+      stopOk: Boolean(stopResponse && stopResponse.ok),
+      total: statusResponse && statusResponse.total,
+      staysWithinPageLimit: Boolean(statusResponse && statusResponse.total > 0 && statusResponse.total <= 80),
+      startMessage: startResponse && startResponse.message || ""
+    };
+  } finally {
+    await readPage.close().catch(() => {});
+  }
+}
+
 async function validateActiveTabMessageBridge(context, extensionPage, baseUrl) {
   const firstPage = await context.newPage();
   const secondPage = await context.newPage();
@@ -770,6 +798,7 @@ async function run() {
       }
     });
     const readAloudFocusResult = await validateReadAloudFocusNavigation(context, optionsPage, baseUrl);
+    const readAloudLimitResult = await validateReadAloudPageLimit(context, optionsPage, baseUrl);
     await setSettings(optionsPage, {
       enabled: true,
       modes: {
@@ -858,7 +887,7 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, readAloudFocusResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, readAloudFocusResult, readAloudLimitResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -911,6 +940,9 @@ async function run() {
     }
     if (!readAloudFocusResult.startOk || !readAloudFocusResult.stopOk || !readAloudFocusResult.reachedDeepSection || readAloudFocusResult.currentId !== "read-aloud-deep-section" || !readAloudFocusResult.targetFocused || !readAloudFocusResult.targetMarked || readAloudFocusResult.targetTabIndex !== "-1" || !readAloudFocusResult.scrolledToTarget || !readAloudFocusResult.targetVisible || !readAloudFocusResult.currentCleared || !readAloudFocusResult.targetTabIndexCleared) {
       throw new Error("Read aloud fixture failed source focus and scroll assertions.");
+    }
+    if (!readAloudLimitResult.startOk || !readAloudLimitResult.stopOk || !readAloudLimitResult.staysWithinPageLimit) {
+      throw new Error("Read aloud fixture failed page length limit assertions.");
     }
     if (!focusReaderResult.hasReader || focusReaderResult.linkText !== "reader details link" || !focusReaderResult.linkHref.includes("/article.html#details") || focusReaderResult.linkTabIndex < 0) {
       throw new Error("Focus reader failed link preservation assertions.");
