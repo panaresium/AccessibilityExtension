@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const vm = require("vm");
 
 const projectRoot = path.resolve(__dirname, "..");
 const ignoredDirectories = new Set([".git", "node_modules"]);
@@ -50,15 +50,15 @@ function walkDirectory(directory) {
 }
 
 function checkJavaScriptSyntax(filePath) {
-  const result = spawnSync(process.execPath, ["--check", filePath], {
-    encoding: "utf8"
-  });
-
-  if (result.status !== 0) {
+  try {
+    new vm.Script(fs.readFileSync(filePath, "utf8"), {
+      filename: filePath
+    });
+  } catch (error) {
     failures.push({
       file: toRelativePath(filePath),
       type: "javascript",
-      message: (result.stderr || result.stdout || "node --check failed").trim()
+      message: error.message
     });
   }
 }
