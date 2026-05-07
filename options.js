@@ -16,6 +16,11 @@
     removePreset,
     clearActivePreset,
     pruneSiteStore,
+    getSiteKeyFromUrl,
+    getSiteLabelFromUrl,
+    upsertSiteRule,
+    removeSiteRule,
+    normalizeSiteRule,
     createProfile,
     upsertProfile,
     removeProfile,
@@ -178,6 +183,17 @@
     document.getElementById("importSettings").addEventListener("click", () => {
       try {
         const imported = JSON.parse(document.getElementById("settingsJson").value);
+        if (imported.site && imported.site.rule && imported.site.key) {
+          siteStore = upsertSiteRule(siteStore, `https://${imported.site.key}`, imported.site.rule);
+          chrome.storage.local.set({ [SITE_STORAGE_KEY]: siteStore }, () => {
+            renderSiteRules();
+            document.getElementById("siteRuleSelect").value = imported.site.key;
+            loadSelectedSiteRule();
+            setStatus("Imported site rule.");
+          });
+          return;
+        }
+
         settings = withDefaults(imported.globalSettings || imported);
         siteStore = withSiteStore(imported.siteSettings || siteStore);
         siteStore = pruneSiteStore(siteStore);
@@ -209,6 +225,26 @@
       });
     }
 
+    document.getElementById("siteRuleSelect").addEventListener("change", () => {
+      loadSelectedSiteRule();
+    });
+
+    document.getElementById("saveSiteRule").addEventListener("click", () => {
+      saveSiteRuleFromEditor();
+    });
+
+    document.getElementById("validateSiteRule").addEventListener("click", () => {
+      validateSiteRuleEditor();
+    });
+
+    document.getElementById("deleteSiteRule").addEventListener("click", () => {
+      deleteSelectedSiteRule();
+    });
+
+    document.getElementById("exportSiteRule").addEventListener("click", () => {
+      exportSelectedSiteRule();
+    });
+
     document.getElementById("undoGlobalSettings").addEventListener("click", undoGlobalSettings);
 
     document.getElementById("reset").addEventListener("click", () => {
@@ -239,6 +275,7 @@
     renderPresetStates();
     renderVoiceControls();
     renderProfiles();
+    renderSiteRules();
     renderUndoState();
   }
 
@@ -397,6 +434,173 @@
 
   function saveProfileStore(callback) {
     chrome.storage.local.set({ [PROFILE_STORAGE_KEY]: profileStore }, callback);
+  }
+
+  function renderSiteRules() {
+    const select = document.getElementById("siteRuleSelect");
+    if (!select) {
+      return;
+    }
+
+    const selected = select.value;
+    const sites = Object.values(siteStore.sites || {})
+      .filter((site) => site && site.key)
+      .sort((first, second) => String(first.label || first.key).localeCompare(String(second.label || second.key)));
+
+    select.textContent = "";
+    select.append(new Option(sites.length ? "Choose a saved site" : "No saved site rules", ""));
+    sites.forEach((site) => {
+      const ruleLabel = site.rule && site.rule.mainSelectors && site.rule.mainSelectors.length ? "rule" : "settings";
+      select.append(new Option(`${site.label || site.key} (${ruleLabel})`, site.key));
+    });
+
+    select.value = sites.some((site) => site.key === selected) ? selected : "";
+    document.getElementById("deleteSiteRule").disabled = !select.value;
+    document.getElementById("exportSiteRule").disabled = !select.value;
+  }
+
+  function loadSelectedSiteRule() {
+    const key = document.getElementById("siteRuleSelect").value;
+    const entry = key ? siteStore.sites[key] : null;
+    const rule = normalizeSiteRule(entry && entry.rule);
+
+    document.getElementById("siteRuleUrl").value = entry && entry.key ? entry.key : "";
+    document.getElementById("siteRuleMainSelectors").value = (rule.mainSelectors || []).join("\n");
+    document.getElementById("siteRuleHideSelectors").value = (rule.hideSelectors || []).join("\n");
+    document.getElementById("siteRuleMediaSelectors").value = (rule.mediaSelectors || []).join("\n");
+    setSiteRuleStatus(entry ? `Loaded ${entry.label || entry.key}.` : "");
+  }
+
+  function saveSiteRuleFromEditor() {
+    const url = document.getElementById("siteRuleUrl").value.trim();
+    const siteKey = getSiteKeyFromUrl(url) || getSiteKeyFromUrl(`https://${url}`);
+    if (!siteKey) {
+      setSiteRuleStatus("Enter a valid http or https website.");
+      return;
+    }
+
+    const mainSelectors = splitSelectorLines(document.getElementById("siteRuleMainSelectors").value);
+    const hideSelectors = splitSelectorLines(document.getElementById("siteRuleHideSelectors").value);
+    const mediaSelectors = splitSelectorLines(document.getElementById("siteRuleMediaSelectors").value);
+    const rule = normalizeSiteRule({
+      label: getSiteLabelFromUrl(`https://${siteKey}`),
+      source: "manual",
+      mainSelector: mainSelectors[0] || "",
+      mainSelectors,
+      hideSelectors,
+      mediaSelectors
+    });
+    const invalidSelector = findInvalidSelector([].concat(rule.mainSelectors, rule.hideSelectors, rule.mediaSelectors));
+    if (invalidSelector) {
+      setSiteRuleStatus(`Invalid selector: ${invalidSelector}`);
+      return;
+    }
+
+    siteStore = upsertSiteRule(siteStore, `https://${siteKey}`, rule);
+    chrome.storage.local.set({ [SITE_STORAGE_KEY]: siteStore }, () => {
+      renderSiteRules();
+      document.getElementById("siteRuleSelect").value = siteKey;
+      setSiteRuleStatus(`Saved rule for ${siteKey}.`);
+    });
+  }
+
+  function validateSiteRuleEditor() {
+    const selectors = []
+      .concat(splitSelectorLines(document.getElementById("siteRuleMainSelectors").value))
+      .concat(splitSelectorLines(document.getElementById("siteRuleHideSelectors").value))
+      .concat(splitSelectorLines(document.getElementById("siteRuleMediaSelectors").value));
+    const invalidSelector = findInvalidSelector(selectors);
+
+    if (invalidSelector) {
+      setSiteRuleStatus(`Invalid selector: ${invalidSelector}`);
+      return;
+    }
+
+    if (!selectors.length) {
+      setSiteRuleStatus("Add at least one selector to validate.");
+      return;
+    }
+
+    chrome.runtime.sendMessage({
+      type: "ACCESSIVIEW_SEND_TO_ACTIVE_TAB",
+      payload: {
+        type: "ACCESSIVIEW_TEST_SELECTORS",
+        selectors
+      }
+    }, (response) => {
+      const matched = response && response.results
+        ? response.results.filter((result) => result.ok && result.count > 0).length
+        : 0;
+      if (response && response.results) {
+        setSiteRuleStatus(`${selectors.length} selectors valid. ${matched} match the active page.`);
+        return;
+      }
+
+      setSiteRuleStatus(`${selectors.length} selectors valid. Open a matching page to test counts.`);
+    });
+  }
+
+  function deleteSelectedSiteRule() {
+    const key = document.getElementById("siteRuleSelect").value;
+    if (!key) {
+      setSiteRuleStatus("Select a saved site first.");
+      return;
+    }
+
+    siteStore = removeSiteRule(siteStore, `https://${key}`);
+    chrome.storage.local.set({ [SITE_STORAGE_KEY]: siteStore }, () => {
+      renderSiteRules();
+      loadSelectedSiteRule();
+      setSiteRuleStatus(`Deleted rule for ${key}. Site settings were kept.`);
+    });
+  }
+
+  function exportSelectedSiteRule() {
+    const key = document.getElementById("siteRuleSelect").value;
+    const entry = key ? siteStore.sites[key] : null;
+    if (!entry || !entry.rule) {
+      setSiteRuleStatus("Select a saved rule first.");
+      return;
+    }
+
+    document.getElementById("settingsJson").value = JSON.stringify({
+      type: "AccessiView site rule export",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      site: {
+        key,
+        label: entry.label || key,
+        rule: normalizeSiteRule(entry.rule)
+      }
+    }, null, 2);
+    setSiteRuleStatus("Site rule exported.");
+  }
+
+  function splitSelectorLines(value) {
+    return String(value || "")
+      .split(/\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 80);
+  }
+
+  function findInvalidSelector(selectors) {
+    const testRoot = document.createDocumentFragment();
+    return selectors.find((selector) => {
+      try {
+        testRoot.querySelectorAll(selector);
+        return false;
+      } catch (_error) {
+        return true;
+      }
+    }) || "";
+  }
+
+  function setSiteRuleStatus(message) {
+    const status = document.getElementById("siteRuleStatus");
+    if (status) {
+      status.textContent = message;
+    }
   }
 
   function renderUndoState() {

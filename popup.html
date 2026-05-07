@@ -57,6 +57,39 @@
         <div id="auditRecommendations" class="recommendation-list"></div>
       </section>
 
+      <section class="panel setup-panel">
+        <div class="section-heading">
+          <h2>Guided Setup</h2>
+          <button id="applySetupWizard" type="button">Apply</button>
+        </div>
+        <div class="setup-options" role="group" aria-label="Guided setup needs">
+          <label class="check-row">
+            <input type="checkbox" data-setup-need="vision">
+            Bigger text and high contrast
+          </label>
+          <label class="check-row">
+            <input type="checkbox" data-setup-need="focus">
+            Less clutter while reading
+          </label>
+          <label class="check-row">
+            <input type="checkbox" data-setup-need="reading">
+            Easier long-form reading
+          </label>
+          <label class="check-row">
+            <input type="checkbox" data-setup-need="forms">
+            Help with forms
+          </label>
+          <label class="check-row">
+            <input type="checkbox" data-setup-need="motion">
+            Reduce motion and autoplay
+          </label>
+          <label class="check-row">
+            <input type="checkbox" data-setup-need="keyboard">
+            Keyboard navigation support
+          </label>
+        </div>
+      </section>
+
       <section class="panel structure-panel">
         <div class="section-heading">
           <h2>Page Structure</h2>
@@ -449,8 +482,11 @@
           <button id="pauseRead" type="button">Pause</button>
           <button id="resumeRead" type="button">Resume</button>
           <button id="nextRead" type="button">Next</button>
+          <button id="resumeSavedRead" type="button" disabled>Resume saved</button>
+          <button id="bookmarkRead" type="button" disabled>Bookmark</button>
         </div>
         <p id="speechStatus" role="status" aria-live="polite">Read selected text or detected page content.</p>
+        <div id="speechBookmarks" class="speech-bookmarks" role="region" aria-label="Reading bookmarks"></div>
         <label>
           Voice
           <select data-path="modes.speech.voiceURI" data-voice-select>

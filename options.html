@@ -43,6 +43,34 @@
         </div>
       </section>
 
+      <section class="card utility-card site-rule-manager">
+        <div class="card-title">
+          <h2>Site Rule Manager</h2>
+        </div>
+        <label>Saved site
+          <select id="siteRuleSelect"></select>
+        </label>
+        <label>Website URL or hostname
+          <input id="siteRuleUrl" type="text" placeholder="https://example.com/article">
+        </label>
+        <label>Main content selectors
+          <textarea id="siteRuleMainSelectors" class="compact-textarea" spellcheck="false" aria-label="Main content selectors"></textarea>
+        </label>
+        <label>Hide selectors
+          <textarea id="siteRuleHideSelectors" class="compact-textarea" spellcheck="false" aria-label="Hide selectors"></textarea>
+        </label>
+        <label>Media selectors
+          <textarea id="siteRuleMediaSelectors" class="compact-textarea" spellcheck="false" aria-label="Media selectors"></textarea>
+        </label>
+        <div class="actions">
+          <button id="saveSiteRule" type="button">Save Rule</button>
+          <button id="validateSiteRule" type="button">Validate</button>
+          <button id="deleteSiteRule" type="button">Delete Rule</button>
+          <button id="exportSiteRule" type="button">Export Rule</button>
+        </div>
+        <p id="siteRuleStatus" role="status" aria-live="polite"></p>
+      </section>
+
       <section class="grid">
         <article class="card" data-mode-card="focus">
           <div class="card-title">

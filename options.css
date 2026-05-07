@@ -278,6 +278,10 @@ textarea {
   resize: vertical;
 }
 
+.compact-textarea {
+  min-height: 88px;
+}
+
 .swatches {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -325,6 +329,11 @@ textarea {
 }
 
 #status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+#siteRuleStatus {
   color: var(--muted);
   font-size: 13px;
 }

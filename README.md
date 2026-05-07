@@ -21,15 +21,20 @@ AccessiView is a Chrome extension prototype for adapting web pages to user acces
 - Color filters for grayscale, warm, cool, brightness, contrast, and saturation tuning.
 - Read aloud for selected text or detected page content, with automatic language-aware voice switching, shorter natural speech segments, optional subtle pauses, and current-speech highlighting.
 - Read aloud transport controls for pause, resume, previous segment, and next segment.
+- Read aloud saves page progress locally and supports resuming or bookmarking page-reading segments.
 - Local page summary panel that runs on the browser's on-device Summarizer API when available, falls back to offline extractive summarization, caches summaries locally, and can read the summary aloud.
+- Summary source details with page highlighting for the text used by local extraction.
 - Accessibility Health scan in the popup with page-specific recommendations.
+- Expandable Accessibility Health issue details with page highlighting for affected elements.
 - Page Structure inspection for headings, landmarks, forms, live regions, missing image alt text, and static keyboard tab order diagnostics.
 - Built-in site rule packs for difficult websites, including MSN, Thaiware, and Wikipedia-style article pages.
 - Manual main-content picker that saves a selected content region for the current website.
+- Options-page site rule manager for validating, editing, exporting, and importing custom selector rules.
 - Undo for the last global or current-site settings change.
 - Persistent Chrome/Edge Side Panel support so controls stay open while interacting with the page.
 - Optional in-page quick button for opening the side panel and toggling Focus, Contrast, Motion, or page-level off.
 - Popup quick controls and a full options page.
+- Guided setup in the popup that combines existing presets based on common user needs.
 - Toggleable presets for low vision, focus, plain page, dyslexia, cognitive support, form filling, calm, night reading, keyboard use, motion safety, bilingual reading, reading comfort, and photosensitivity.
 - Collapsible popup and options sections to keep long settings menus manageable.
 - Per-website settings saved in local extension storage.

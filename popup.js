@@ -42,6 +42,9 @@
   let speechVoices = [];
   let currentAudit = null;
   let currentSummary = null;
+  let currentSummaryItems = [];
+  let currentSpeechProgress = null;
+  let currentSpeechBookmarks = [];
   let popupReady = false;
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -309,6 +312,10 @@
       applyAuditRecommendations();
     });
 
+    document.getElementById("applySetupWizard").addEventListener("click", () => {
+      applySetupWizard();
+    });
+
     document.getElementById("inspectStructure").addEventListener("click", () => {
       inspectPageStructure();
     });
@@ -387,6 +394,14 @@
 
     document.getElementById("nextRead").addEventListener("click", () => {
       sendSpeechControl("ACCESSIVIEW_NEXT_READING");
+    });
+
+    document.getElementById("resumeSavedRead").addEventListener("click", () => {
+      resumeSavedReading();
+    });
+
+    document.getElementById("bookmarkRead").addEventListener("click", () => {
+      saveReadingBookmark();
     });
 
     document.getElementById("showKeyboardMap").addEventListener("click", () => {
@@ -476,7 +491,7 @@
   }
 
   function setupCollapsibleSections() {
-    document.querySelectorAll(".audit-panel, .structure-panel, .summary-panel, .preset-panel, .profile-panel, .mode-card, .speech-panel").forEach((section, index) => {
+    document.querySelectorAll(".audit-panel, .setup-panel, .structure-panel, .summary-panel, .preset-panel, .profile-panel, .mode-card, .speech-panel").forEach((section, index) => {
       const header = section.querySelector(".mode-title, .section-heading");
       if (!header || section.dataset.collapsibleReady === "true") {
         return;
@@ -682,16 +697,60 @@
 
     list.textContent = "";
     (currentAudit && currentAudit.recommendations ? currentAudit.recommendations : []).forEach((recommendation) => {
-      const item = document.createElement("div");
+      const item = document.createElement("details");
+      const summary = document.createElement("summary");
       const title = document.createElement("strong");
       const description = document.createElement("span");
       item.className = "recommendation-item";
       title.textContent = recommendation.label;
       description.textContent = recommendation.description;
-      item.append(title, description);
+      summary.append(title);
+      item.append(summary, description);
+
+      const issues = Array.isArray(recommendation.issues) ? recommendation.issues : [];
+      if (issues.length) {
+        const issueList = document.createElement("div");
+        issueList.className = "recommendation-issues";
+        issues.forEach((issue) => {
+          issueList.append(createIssueRow(issue));
+        });
+        item.append(issueList);
+      }
+
       list.append(item);
     });
     renderAuditActions();
+  }
+
+  function createIssueRow(issue) {
+    const row = document.createElement("div");
+    const label = document.createElement("span");
+    const detail = document.createElement("span");
+    const button = document.createElement("button");
+
+    row.className = "issue-row";
+    label.textContent = `${issue.group ? `${issue.group}: ` : ""}${issue.label || "Page issue"}`;
+    detail.textContent = issue.detail || issue.selector || "";
+    button.type = "button";
+    button.textContent = "Highlight";
+    button.disabled = !issue.selector;
+    button.addEventListener("click", () => highlightPageSelector(issue.selector, issue.label || "Accessibility issue"));
+    row.append(label);
+    if (detail.textContent) {
+      row.append(detail);
+    }
+    row.append(button);
+    return row;
+  }
+
+  function highlightPageSelector(selector, label) {
+    sendMessageToActiveTab({
+      type: "ACCESSIVIEW_HIGHLIGHT_SELECTOR",
+      selector,
+      label
+    }, (response) => {
+      setStatus(response && response.message ? response.message : "Issue highlighted.");
+    });
   }
 
   function renderAuditActions() {
@@ -710,6 +769,7 @@
   function clearPageScopedOutputs() {
     currentAudit = null;
     currentSummary = null;
+    currentSummaryItems = [];
     renderAuditRecommendations();
     setAuditSummary("Scan this page for common accessibility issues.");
     setStructureSummary("Inspect headings, landmarks, live regions, and keyboard focus order.");
@@ -976,6 +1036,53 @@
     }
   }
 
+  function applySetupWizard() {
+    const selectedNeeds = Array.from(document.querySelectorAll("[data-setup-need]:checked"))
+      .map((control) => control.dataset.setupNeed);
+    const presetIds = getSetupPresetIds(selectedNeeds);
+
+    if (!presetIds.length) {
+      setStatus("Choose at least one setup need.");
+      return;
+    }
+
+    presetIds.forEach((presetId) => {
+      settings = applyPreset(settings, presetId);
+    });
+    settings.enabled = true;
+    saveAndRender(true);
+    setStatus("Guided setup applied.");
+  }
+
+  function getSetupPresetIds(needs) {
+    const ids = [];
+    const add = (presetId) => {
+      if (!ids.includes(presetId)) {
+        ids.push(presetId);
+      }
+    };
+
+    needs.forEach((need) => {
+      if (need === "vision") {
+        add("lowVision");
+      } else if (need === "focus") {
+        add("focus");
+        add("plainPage");
+      } else if (need === "reading") {
+        add("readingComfort");
+        add("dyslexia");
+      } else if (need === "forms") {
+        add("formFilling");
+      } else if (need === "motion") {
+        add("motionSafe");
+      } else if (need === "keyboard") {
+        add("keyboard");
+      }
+    });
+
+    return ids;
+  }
+
   function summarizePage() {
     const status = document.getElementById("summaryStatus");
     const output = document.getElementById("summaryOutput");
@@ -1000,11 +1107,49 @@
       }
 
       currentSummary = response.summary || "";
-      output.textContent = currentSummary;
+      currentSummaryItems = Array.isArray(response.summaryItems) ? response.summaryItems : [];
+      renderSummaryOutput(output, currentSummary, currentSummaryItems);
       renderSummaryActions();
       const cacheLabel = response.cached ? " cached" : "";
       status.textContent = `${response.methodLabel || response.method || "Local"} summary${cacheLabel}. ${response.sourceLength || 0} characters read.`;
     });
+  }
+
+  function renderSummaryOutput(output, summary, items) {
+    output.textContent = "";
+    const text = document.createElement("div");
+    text.className = "summary-text";
+    text.textContent = summary || "";
+    output.append(text);
+
+    const sources = (Array.isArray(items) ? items : []).filter((item) => item && (item.sourceText || item.selector));
+    if (!sources.length) {
+      return;
+    }
+
+    const sourceList = document.createElement("div");
+    const heading = document.createElement("h3");
+    sourceList.className = "summary-sources";
+    heading.textContent = "Sources";
+    sourceList.append(heading);
+
+    sources.slice(0, 6).forEach((source) => {
+      const row = document.createElement("div");
+      const excerpt = document.createElement("span");
+      const button = document.createElement("button");
+      row.className = "source-row";
+      excerpt.textContent = source.sourceText || source.text || source.selector || "Source text";
+      button.type = "button";
+      button.textContent = "Show source";
+      button.disabled = !source.selector;
+      button.addEventListener("click", () => {
+        highlightPageSelector(source.selector, source.sourceText || source.text || "Summary source");
+      });
+      row.append(excerpt, button);
+      sourceList.append(row);
+    });
+
+    output.append(sourceList);
   }
 
   function renderSummaryActions() {
@@ -1153,13 +1298,35 @@
     });
   }
 
+  function resumeSavedReading(index) {
+    sendMessageToActiveTab({
+      type: "ACCESSIVIEW_RESUME_STORED_READING",
+      index
+    }, (response) => {
+      setStatus(response && response.message ? response.message : "Resume command sent.");
+      renderSpeechStatus(response && response.status ? response.status : response);
+      requestSpeechStatus();
+    });
+  }
+
+  function saveReadingBookmark() {
+    sendMessageToActiveTab({ type: "ACCESSIVIEW_ADD_SPEECH_BOOKMARK" }, (response) => {
+      setStatus(response && response.message ? response.message : "Reading bookmark saved.");
+      if (response && response.bookmarks) {
+        currentSpeechBookmarks = response.bookmarks;
+        renderSpeechBookmarks();
+      }
+      requestSpeechStatus();
+    });
+  }
+
   function requestSpeechStatus() {
     const status = document.getElementById("speechStatus");
     if (!status || !currentUrl) {
       return;
     }
 
-    sendMessageToActiveTab({ type: "ACCESSIVIEW_GET_SPEECH_STATUS" }, (response) => {
+    sendMessageToActiveTab({ type: "ACCESSIVIEW_GET_SPEECH_PROGRESS" }, (response) => {
       renderSpeechStatus(response);
     });
   }
@@ -1171,12 +1338,58 @@
     }
 
     if (!response || !response.active) {
-      status.textContent = "Read selected text or detected page content.";
+      currentSpeechProgress = response && response.progress ? response.progress : null;
+      currentSpeechBookmarks = response && Array.isArray(response.bookmarks) ? response.bookmarks : [];
+      status.textContent = currentSpeechProgress
+        ? `Saved at segment ${Number(currentSpeechProgress.index || 0) + 1} of ${currentSpeechProgress.total || 0}.`
+        : "Read selected text or detected page content.";
+      renderSpeechActions(false);
+      renderSpeechBookmarks();
       return;
     }
 
     const state = response.paused ? "Paused" : "Reading";
+    currentSpeechProgress = response.progress || currentSpeechProgress;
+    currentSpeechBookmarks = response && Array.isArray(response.bookmarks) ? response.bookmarks : currentSpeechBookmarks;
     status.textContent = `${state} ${response.index + 1} of ${response.total}`;
+    renderSpeechActions(Boolean(response.canBookmark));
+    renderSpeechBookmarks();
+  }
+
+  function renderSpeechActions(canBookmark) {
+    const resumeButton = document.getElementById("resumeSavedRead");
+    const bookmarkButton = document.getElementById("bookmarkRead");
+    if (resumeButton) {
+      resumeButton.disabled = !currentSpeechProgress;
+    }
+    if (bookmarkButton) {
+      bookmarkButton.disabled = !canBookmark;
+    }
+  }
+
+  function renderSpeechBookmarks() {
+    const output = document.getElementById("speechBookmarks");
+    if (!output) {
+      return;
+    }
+
+    output.textContent = "";
+    if (!currentSpeechBookmarks.length) {
+      return;
+    }
+
+    currentSpeechBookmarks.slice(0, 4).forEach((bookmark) => {
+      const row = document.createElement("div");
+      const text = document.createElement("span");
+      const button = document.createElement("button");
+      row.className = "bookmark-row";
+      text.textContent = `${bookmark.label || `Segment ${bookmark.index + 1}`}: ${bookmark.text || ""}`;
+      button.type = "button";
+      button.textContent = "Resume here";
+      button.addEventListener("click", () => resumeSavedReading(bookmark.index));
+      row.append(text, button);
+      output.append(row);
+    });
   }
 
   function applyToActiveTab() {

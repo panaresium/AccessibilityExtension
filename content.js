@@ -10,8 +10,13 @@
     getSiteRule,
     upsertSiteRule,
     SUMMARY_CACHE_KEY,
+    SPEECH_PROGRESS_KEY,
     withSummaryCache,
-    upsertSummaryCache
+    upsertSummaryCache,
+    withSpeechProgressStore,
+    getSpeechProgressEntry,
+    upsertSpeechProgress,
+    addSpeechBookmark
   } = globalThis.AccessiViewConfig;
   const ROOT_CLASSES = [
     "av-enabled",
@@ -292,6 +297,8 @@
   let cognitiveObservedTargets = new WeakSet();
   let keyboardMapHost = null;
   let speechHighlightHost = null;
+  let auditHighlightHost = null;
+  let auditHighlightTimer = null;
   let contentPickerHost = null;
   let contentPickerResponse = null;
   let contentPickerTarget = null;
@@ -488,6 +495,16 @@
           return false;
         }
 
+        if (message.type === "ACCESSIVIEW_HIGHLIGHT_SELECTOR") {
+          sendResponse(highlightAuditSelector(message.selector || "", message.label || ""));
+          return false;
+        }
+
+        if (message.type === "ACCESSIVIEW_TEST_SELECTORS") {
+          sendResponse(testSelectorsOnPage(message.selectors || []));
+          return false;
+        }
+
         if (message.type === "ACCESSIVIEW_SUMMARIZE_PAGE") {
           summarizeCurrentPage(message.options || {})
             .then(sendResponse)
@@ -511,6 +528,27 @@
           readCurrentPage()
             .then(sendResponse)
             .catch(() => sendResponse({ ok: false, message: "Read aloud failed on this page." }));
+          return true;
+        }
+
+        if (message.type === "ACCESSIVIEW_RESUME_STORED_READING") {
+          resumeStoredSpeech(message.index)
+            .then(sendResponse)
+            .catch(() => sendResponse({ ok: false, message: "Could not resume reading on this page." }));
+          return true;
+        }
+
+        if (message.type === "ACCESSIVIEW_ADD_SPEECH_BOOKMARK") {
+          addCurrentSpeechBookmark()
+            .then(sendResponse)
+            .catch(() => sendResponse({ ok: false, message: "Could not save this reading bookmark." }));
+          return true;
+        }
+
+        if (message.type === "ACCESSIVIEW_GET_SPEECH_PROGRESS") {
+          getStoredSpeechProgress()
+            .then(sendResponse)
+            .catch(() => sendResponse({ ok: true, active: false, progress: null, bookmarks: [] }));
           return true;
         }
 
@@ -2097,7 +2135,8 @@ html.av-guide-line #accessiview-reading-guide {
         type: getReaderBlockType(tagName),
         level: /^h[1-6]$/.test(tagName) ? Number(tagName.slice(1)) : null,
         text,
-        html: getReaderElementInlineHtml(element)
+        html: getReaderElementInlineHtml(element),
+        selector: getStableCssSelector(element)
       });
     });
 
@@ -2152,6 +2191,7 @@ html.av-guide-line #accessiview-reading-guide {
           level: /^h[1-6]$/.test(tagName) ? Number(tagName.slice(1)) : null,
           text,
           html: getReaderElementInlineHtml(element),
+          selector: getStableCssSelector(element),
           top: rect.top + window.scrollY,
           left: rect.left + window.scrollX,
           length: text.length
@@ -2162,7 +2202,7 @@ html.av-guide-line #accessiview-reading-guide {
     return candidates
       .sort((first, second) => first.top - second.top || first.left - second.left || second.length - first.length)
       .slice(0, 160)
-      .map(({ type, level, text, html }) => ({ type, level, text, html }));
+      .map(({ type, level, text, html, selector }) => ({ type, level, text, html, selector }));
   }
 
   function collectFallbackTextBlocks(source) {
@@ -2182,7 +2222,7 @@ html.av-guide-line #accessiview-reading-guide {
       .map(normalizeReaderText)
       .filter((line) => line.length >= 35)
       .slice(0, 120)
-      .map((line) => ({ type: "paragraph", level: null, text: line }));
+      .map((line) => ({ type: "paragraph", level: null, text: line, selector: source ? getStableCssSelector(source) : "body" }));
   }
 
   function shouldSkipReaderElement(element) {
@@ -3871,28 +3911,54 @@ html.av-guide-line #accessiview-reading-guide {
     const media = collectVisibleElements(roots, "video, audio");
     const headings = collectVisibleElements(roots, "h1,h2,h3,h4,h5,h6,[role='heading']");
     const lowContrast = sampleLowContrastText(roots);
-    const missingAlt = images.filter((image) => !image.hasAttribute("alt") || image.getAttribute("alt").trim() === "").length;
-    const unlabeledControls = controls.filter((control) => !hasAccessibleControlName(control)).length;
+    const missingAltItems = images
+      .filter((image) => !image.hasAttribute("alt") || image.getAttribute("alt").trim() === "")
+      .map((image) => getAuditIssueItem(image, "Image missing alt text", getAccessibleElementName(image) || image.currentSrc || image.src || "Visible image"));
+    const unlabeledControlItems = controls
+      .filter((control) => !hasAccessibleControlName(control))
+      .map((control) => getAuditIssueItem(control, "Control missing accessible name", getKeyboardTargetLabel(control)));
     const requiredFields = controls.filter((control) => control.required || control.getAttribute("aria-required") === "true").length;
-    const invalidFields = controls.filter(isInvalidFormControl).length;
-    const smallTargets = focusables.filter((element) => {
+    const invalidFieldItems = controls
+      .filter(isInvalidFormControl)
+      .map((control) => getAuditIssueItem(control, "Invalid form field", getKeyboardTargetLabel(control)));
+    const smallTargetItems = focusables.filter((element) => {
       const rect = element.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0 && (rect.width < 24 || rect.height < 24);
-    }).length;
-    const autoplayMedia = media.filter((element) => element.autoplay || element.hasAttribute("autoplay")).length;
+    }).map((element) => getAuditIssueItem(element, "Small focus target", getKeyboardTargetLabel(element)));
+    const autoplayMediaItems = media
+      .filter((element) => element.autoplay || element.hasAttribute("autoplay"))
+      .map((element) => getAuditIssueItem(element, "Autoplay media", getAccessibleElementName(element) || element.tagName.toLowerCase()));
     const headingReport = auditHeadings(headings);
+    const headingIssueItems = getHeadingItems(headings)
+      .filter((heading) => heading.issues && heading.issues.length)
+      .map((heading) => ({
+        selector: heading.selector,
+        label: heading.text || "Heading issue",
+        detail: heading.issues.join(", ")
+      }));
     const clutterCount = countLikelyClutter();
+    const issueGroups = buildAuditIssueGroups({
+      lowContrastItems: lowContrast.items,
+      missingAltItems,
+      unlabeledControlItems,
+      invalidFieldItems,
+      smallTargetItems,
+      autoplayMediaItems,
+      headingIssueItems
+    });
     const recommendations = buildAuditRecommendations({
-      missingAlt,
-      unlabeledControls,
+      missingAlt: missingAltItems.length,
+      unlabeledControls: unlabeledControlItems.length,
       requiredFields,
-      invalidFields,
-      smallTargets,
+      invalidFields: invalidFieldItems.length,
+      smallTargets: smallTargetItems.length,
       lowContrastCount: lowContrast.count,
-      autoplayMedia,
+      autoplayMedia: autoplayMediaItems.length,
       headingIssues: headingReport.issues,
       clutterCount
-    });
+    }).map((recommendation) => Object.assign({}, recommendation, {
+      issues: getAuditRecommendationIssues(recommendation.id, issueGroups)
+    }));
 
     return {
       title: document.title || window.location.hostname || "This page",
@@ -3900,29 +3966,30 @@ html.av-guide-line #accessiview-reading-guide {
       scannedAt: new Date().toISOString(),
       counts: {
         images: images.length,
-        missingAlt,
+        missingAlt: missingAltItems.length,
         controls: controls.length,
-        unlabeledControls,
+        unlabeledControls: unlabeledControlItems.length,
         requiredFields,
-        invalidFields,
+        invalidFields: invalidFieldItems.length,
         focusTargets: focusables.length,
-        smallTargets,
-        autoplayMedia,
+        smallTargets: smallTargetItems.length,
+        autoplayMedia: autoplayMediaItems.length,
         headings: headings.length,
         headingIssues: headingReport.issues,
         lowContrastText: lowContrast.count,
         likelyClutter: clutterCount
       },
       score: scoreAudit({
-        missingAlt,
-        unlabeledControls,
-        invalidFields,
-        smallTargets,
+        missingAlt: missingAltItems.length,
+        unlabeledControls: unlabeledControlItems.length,
+        invalidFields: invalidFieldItems.length,
+        smallTargets: smallTargetItems.length,
         lowContrastCount: lowContrast.count,
-        autoplayMedia,
+        autoplayMedia: autoplayMediaItems.length,
         headingIssues: headingReport.issues
       }),
       headingReport,
+      issueGroups,
       recommendations
     };
   }
@@ -4262,6 +4329,7 @@ html.av-guide-line #accessiview-reading-guide {
   function sampleLowContrastText(roots) {
     let count = 0;
     let sampled = 0;
+    const items = [];
 
     roots.forEach((root) => {
       if (sampled >= 220) {
@@ -4289,13 +4357,21 @@ html.av-guide-line #accessiview-reading-guide {
         const fontSize = Number.parseFloat(style.fontSize) || 16;
         const isLarge = fontSize >= 24 || (fontSize >= 18.66 && Number.parseInt(style.fontWeight, 10) >= 700);
         const requiredRatio = isLarge ? 3 : 4.5;
-        if (contrastRatioFromRgb(foreground, background) < requiredRatio) {
+        const ratio = contrastRatioFromRgb(foreground, background);
+        if (ratio < requiredRatio) {
           count += 1;
+          if (items.length < 8) {
+            items.push({
+              selector: getStableCssSelector(element),
+              label: text.slice(0, 90),
+              detail: `Contrast ${ratio.toFixed(1)}:1, needs ${requiredRatio}:1`
+            });
+          }
         }
       });
     });
 
-    return { count, sampled };
+    return { count, sampled, items };
   }
 
   function getReadableBackgroundColor(element) {
@@ -4398,6 +4474,207 @@ html.av-guide-line #accessiview-reading-guide {
       }
     });
     return count;
+  }
+
+  function getAuditIssueItem(element, label, detail) {
+    return {
+      selector: getStableCssSelector(element),
+      label: String(label || getAccessibleElementName(element) || element.tagName || "Issue").slice(0, 120),
+      detail: String(detail || "").slice(0, 180)
+    };
+  }
+
+  function buildAuditIssueGroups(issueSources) {
+    return [
+      {
+        id: "lowContrast",
+        label: "Low contrast text",
+        issues: limitAuditIssues(issueSources.lowContrastItems)
+      },
+      {
+        id: "missingAlt",
+        label: "Images missing alt text",
+        issues: limitAuditIssues(issueSources.missingAltItems)
+      },
+      {
+        id: "forms",
+        label: "Form field issues",
+        issues: limitAuditIssues((issueSources.unlabeledControlItems || []).concat(issueSources.invalidFieldItems || []))
+      },
+      {
+        id: "smallTargets",
+        label: "Small focus targets",
+        issues: limitAuditIssues(issueSources.smallTargetItems)
+      },
+      {
+        id: "motion",
+        label: "Autoplay media",
+        issues: limitAuditIssues(issueSources.autoplayMediaItems)
+      },
+      {
+        id: "headings",
+        label: "Heading structure",
+        issues: limitAuditIssues(issueSources.headingIssueItems)
+      }
+    ].filter((group) => group.issues.length);
+  }
+
+  function limitAuditIssues(items) {
+    const seen = new Set();
+    return (Array.isArray(items) ? items : [])
+      .filter((item) => item && item.selector && !seen.has(item.selector) && seen.add(item.selector))
+      .slice(0, 8);
+  }
+
+  function getAuditRecommendationIssues(id, issueGroups) {
+    const idsByRecommendation = {
+      contrast: ["lowContrast"],
+      altWarnings: ["missingAlt"],
+      forms: ["forms"],
+      navigation: ["smallTargets"],
+      motion: ["motion"],
+      cognitive: ["headings"],
+      readingComfort: []
+    };
+    const groupIds = idsByRecommendation[id] || [];
+    return issueGroups
+      .filter((group) => groupIds.includes(group.id))
+      .flatMap((group) => group.issues.map((issue) => Object.assign({ group: group.label }, issue)))
+      .slice(0, 8);
+  }
+
+  function highlightAuditSelector(selector, label) {
+    if (!IS_TOP_FRAME) {
+      return { ok: false, message: "Highlighting is only available in the top page." };
+    }
+
+    let element = null;
+    try {
+      element = document.querySelector(selector);
+    } catch (_error) {
+      return { ok: false, message: "This issue selector is not valid on the current page." };
+    }
+
+    if (!element || isAccessiViewHost(element)) {
+      return { ok: false, message: "The issue target is no longer visible on this page." };
+    }
+
+    try {
+      element.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+    } catch (_error) {
+      // Some SVG or custom elements can reject scroll options.
+    }
+
+    renderAuditHighlight(element, label || getAccessibleElementName(element) || "Accessibility issue");
+    return { ok: true, message: "Issue highlighted on the page." };
+  }
+
+  function renderAuditHighlight(element, label) {
+    if (auditHighlightTimer) {
+      window.clearTimeout(auditHighlightTimer);
+      auditHighlightTimer = null;
+    }
+
+    if (!auditHighlightHost) {
+      auditHighlightHost = document.createElement("div");
+      auditHighlightHost.id = "accessiview-audit-highlight-host";
+      document.documentElement.appendChild(auditHighlightHost);
+      auditHighlightHost.attachShadow({ mode: "open" });
+    }
+
+    const root = auditHighlightHost.shadowRoot;
+    const rect = element.getBoundingClientRect();
+    const left = clamp(rect.left, 8, Math.max(8, window.innerWidth - 24));
+    const top = clamp(rect.top, 8, Math.max(8, window.innerHeight - 24));
+    const width = clamp(rect.width, 24, Math.max(24, window.innerWidth - left - 8));
+    const height = clamp(rect.height, 24, Math.max(24, window.innerHeight - top - 8));
+
+    root.innerHTML = `
+      <style>
+        :host {
+          all: initial;
+          position: fixed;
+          inset: 0;
+          z-index: 2147483647;
+          pointer-events: none;
+          font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .outline {
+          position: fixed;
+          left: ${left}px;
+          top: ${top}px;
+          width: ${width}px;
+          height: ${height}px;
+          border: 4px solid #f59e0b;
+          border-radius: 8px;
+          box-shadow: 0 0 0 9999px rgba(17, 24, 39, 0.2);
+        }
+
+        .label {
+          position: fixed;
+          left: ${left}px;
+          top: ${Math.max(8, top - 38)}px;
+          max-width: min(360px, calc(100vw - 16px));
+          padding: 7px 10px;
+          border: 2px solid #0f766e;
+          border-radius: 8px;
+          color: #111827;
+          background: #ffffff;
+          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+          font: 700 13px/1.3 Arial, Helvetica, sans-serif;
+        }
+      </style>
+      <div class="outline"></div>
+      <div class="label" role="status">${escapeHtml(label)}</div>
+    `;
+
+    auditHighlightTimer = window.setTimeout(removeAuditHighlight, 3600);
+  }
+
+  function testSelectorsOnPage(selectors) {
+    const results = [];
+    const values = Array.isArray(selectors) ? selectors : [];
+
+    values.slice(0, 80).forEach((selector) => {
+      const text = String(selector || "").trim();
+      if (!text) {
+        return;
+      }
+
+      try {
+        results.push({
+          selector: text,
+          ok: true,
+          count: queryAllAcrossRoots(text).filter((element) => !isAccessiViewHost(element)).length
+        });
+      } catch (error) {
+        results.push({
+          selector: text,
+          ok: false,
+          count: 0,
+          message: error.message || "Invalid selector"
+        });
+      }
+    });
+
+    return {
+      ok: true,
+      url: window.location.href,
+      results
+    };
+  }
+
+  function removeAuditHighlight() {
+    if (auditHighlightTimer) {
+      window.clearTimeout(auditHighlightTimer);
+      auditHighlightTimer = null;
+    }
+
+    if (auditHighlightHost) {
+      auditHighlightHost.remove();
+      auditHighlightHost = null;
+    }
   }
 
   function buildAuditRecommendations(counts) {
@@ -5121,7 +5398,8 @@ html.av-guide-line #accessiview-reading-guide {
       "#accessiview-reader-host",
       "#accessiview-keyboard-map-host",
       "#accessiview-quick-button-host",
-      "#accessiview-speech-highlight-host"
+      "#accessiview-speech-highlight-host",
+      "#accessiview-audit-highlight-host"
     ].join(",");
     const root = element && element.getRootNode ? element.getRootNode() : null;
     const shadowHost = root && root.host;
@@ -5183,6 +5461,7 @@ html.av-guide-line #accessiview-reading-guide {
     stopShadowStyleObserver();
     removeKeyboardMap();
     removeSpeechHighlight();
+    removeAuditHighlight();
     stopContentPicker(false);
     removeQuickButton();
 
@@ -5322,6 +5601,7 @@ html.av-guide-line #accessiview-reading-guide {
         method: "browser",
         methodLabel: "On-device browser AI",
         summary: normalized,
+        summaryItems: getSummarySourceItems(readerContent),
         sourceLength: text.length
       } : null;
     } catch (_error) {
@@ -5361,30 +5641,72 @@ html.av-guide-line #accessiview-reading-guide {
   }
 
   function summarizeWithExtractiveModel(text, readerContent, summaryOptions) {
-    const sentences = splitSummarySentences(text);
-    if (!sentences.length) {
+    const sentenceItems = getSummarySentenceItems(readerContent, text);
+    if (!sentenceItems.length) {
       return {
         method: "extractive",
         methodLabel: "Offline local extraction",
         summary: readerContent.title || "No readable text found.",
+        summaryItems: [],
         sourceLength: text.length
       };
     }
 
+    const sentences = sentenceItems.map((item) => item.text);
     const targetCount = getSummaryTargetCount(summaryOptions.length, summaryOptions.format);
     const scored = scoreSummarySentences(sentences, readerContent.title);
     const selected = scored
       .slice(0, targetCount)
       .sort((first, second) => first.index - second.index)
-      .map((item) => simplifySummarySentence(item.text, summaryOptions.plainLanguage));
-    const summary = formatExtractiveSummary(selected, summaryOptions);
+      .map((item) => ({
+        text: simplifySummarySentence(item.text, summaryOptions.plainLanguage),
+        source: sentenceItems[item.index] || {}
+      }));
+    const summary = formatExtractiveSummary(selected.map((item) => item.text), summaryOptions);
 
     return {
       method: "extractive",
       methodLabel: "Offline local extraction",
       summary,
+      summaryItems: selected.map((item, index) => ({
+        index: index + 1,
+        text: item.text,
+        selector: item.source.selector || "",
+        sourceText: item.source.sourceText || item.source.text || "",
+        type: item.source.type || "paragraph"
+      })),
       sourceLength: text.length
     };
+  }
+
+  function getSummarySentenceItems(readerContent, fallbackText) {
+    const items = [];
+    (readerContent.blocks || []).slice(0, 180).forEach((block) => {
+      const sourceText = normalizeReaderText(block.text);
+      if (sourceText.length < 12) {
+        return;
+      }
+
+      splitSummarySentences(sourceText).forEach((sentence) => {
+        items.push({
+          text: sentence,
+          selector: block.selector || "",
+          sourceText: sourceText.slice(0, 260),
+          type: block.type || "paragraph"
+        });
+      });
+    });
+
+    if (items.length) {
+      return items.slice(0, 260);
+    }
+
+    return splitSummarySentences(fallbackText).map((sentence) => ({
+      text: sentence,
+      selector: "body",
+      sourceText: sentence.slice(0, 260),
+      type: "paragraph"
+    }));
   }
 
   function splitSummarySentences(text) {
@@ -5523,6 +5845,24 @@ html.av-guide-line #accessiview-reading-guide {
       .trim();
   }
 
+  function getSummarySourceItems(readerContent) {
+    return (readerContent.blocks || [])
+      .map((block) => ({
+        text: normalizeReaderText(block.text),
+        selector: block.selector || "",
+        type: block.type || "paragraph"
+      }))
+      .filter((block) => block.text.length >= 35)
+      .slice(0, 6)
+      .map((block, index) => ({
+        index: index + 1,
+        text: block.text.slice(0, 180),
+        selector: block.selector,
+        sourceText: block.text.slice(0, 260),
+        type: block.type
+      }));
+  }
+
   async function getCachedSummary(key) {
     return new Promise((resolve) => {
       safeStorageGet("local", SUMMARY_CACHE_KEY, (result) => {
@@ -5544,6 +5884,7 @@ html.av-guide-line #accessiview-reading-guide {
       safeStorageGet("local", SUMMARY_CACHE_KEY, (result) => {
         const cache = upsertSummaryCache(withSummaryCache(result[SUMMARY_CACHE_KEY]), key, {
           summary: response.summary,
+          summaryItems: response.summaryItems,
           method: response.method,
           methodLabel: response.methodLabel,
           sourceLength: response.sourceLength,
@@ -5573,6 +5914,120 @@ html.av-guide-line #accessiview-reading-guide {
     return String(hash >>> 0);
   }
 
+  async function getSpeechPageKey() {
+    return hashText(window.location.href.split("#")[0]);
+  }
+
+  async function buildSpeechPlan(items, label, persist) {
+    const text = items.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim().slice(0, 24000);
+    if (!text) {
+      return null;
+    }
+
+    const voices = await getSpeechVoices();
+    const documentLanguage = inferSpeechLanguage(text) || getDocumentLanguage() || navigator.language || "";
+    const fallbackVoice = chooseSpeechVoice(voices, text);
+    const chunks = splitSpeechItems(items, documentLanguage);
+    const sourceHash = await hashText(text);
+    const key = persist ? await getSpeechPageKey() : "";
+
+    return {
+      key,
+      title: document.title || window.location.hostname || "This page",
+      url: window.location.href,
+      label: label || "Page reading",
+      sourceHash,
+      text,
+      chunks,
+      voices,
+      fallbackVoice,
+      documentLanguage,
+      persist: Boolean(persist)
+    };
+  }
+
+  async function getCurrentPageSpeechPlan() {
+    return buildSpeechPlan(getReadableSpeechItems(), "Page content", true);
+  }
+
+  async function getStoredSpeechProgress() {
+    const key = await getSpeechPageKey();
+    return new Promise((resolve) => {
+      safeStorageGet("local", SPEECH_PROGRESS_KEY, (result) => {
+        const store = withSpeechProgressStore(result[SPEECH_PROGRESS_KEY]);
+        const entry = getSpeechProgressEntry(store, key);
+        const status = getSpeechStatus();
+        resolve(Object.assign({}, status, {
+          progress: entry,
+          bookmarks: entry && Array.isArray(entry.bookmarks) ? entry.bookmarks : []
+        }));
+      });
+    });
+  }
+
+  async function resumeStoredSpeech(indexOverride) {
+    if (!("speechSynthesis" in window)) {
+      return { ok: false, message: "Speech synthesis is not available in this browser." };
+    }
+
+    const plan = await getCurrentPageSpeechPlan();
+    if (!plan) {
+      return { ok: false, message: "No readable text found on this page." };
+    }
+
+    const entry = await new Promise((resolve) => {
+      safeStorageGet("local", SPEECH_PROGRESS_KEY, (result) => {
+        const store = withSpeechProgressStore(result[SPEECH_PROGRESS_KEY]);
+        resolve(getSpeechProgressEntry(store, plan.key));
+      });
+    });
+
+    if (!entry) {
+      return { ok: false, message: "No saved reading position for this page." };
+    }
+
+    if (entry.sourceHash && entry.sourceHash !== plan.sourceHash) {
+      return { ok: false, message: "The page text changed, so the saved reading position cannot be resumed." };
+    }
+
+    const savedIndex = Number.isFinite(Number(indexOverride)) ? Number(indexOverride) : entry.index;
+    const startIndex = clamp(Math.round(savedIndex), 0, Math.max(0, plan.chunks.length - 1));
+    stopSpeech();
+    speakSpeechChunks(plan.chunks, plan.voices, plan.fallbackVoice, plan.documentLanguage, plan, startIndex);
+    return { ok: true, message: `Resumed reading at segment ${startIndex + 1} of ${plan.chunks.length}.`, status: getSpeechStatus() };
+  }
+
+  async function addCurrentSpeechBookmark() {
+    if (!activeSpeech || !activeSpeech.persist || !activeSpeech.key) {
+      return { ok: false, message: "Start page reading before saving a bookmark." };
+    }
+
+    const key = activeSpeech.key;
+    const snapshot = getActiveSpeechProgressSnapshot();
+    const chunk = activeSpeech.chunks[activeSpeech.index];
+    const index = activeSpeech.index;
+    return new Promise((resolve) => {
+      safeStorageGet("local", SPEECH_PROGRESS_KEY, (result) => {
+        let store = withSpeechProgressStore(result[SPEECH_PROGRESS_KEY]);
+        store = upsertSpeechProgress(store, key, snapshot);
+        store = addSpeechBookmark(store, key, {
+          index,
+          label: `Segment ${index + 1}`,
+          text: chunk ? chunk.text : ""
+        });
+        safeStorageSet("local", { [SPEECH_PROGRESS_KEY]: store }, () => {
+          const entry = getSpeechProgressEntry(store, key);
+          resolve({
+            ok: true,
+            message: "Reading bookmark saved.",
+            progress: entry,
+            bookmarks: entry && entry.bookmarks ? entry.bookmarks : []
+          });
+        });
+      });
+    });
+  }
+
   async function readCurrentPage() {
     if (!("speechSynthesis" in window)) {
       return { ok: false, message: "Speech synthesis is not available in this browser." };
@@ -5580,23 +6035,19 @@ html.av-guide-line #accessiview-reading-guide {
 
     const selectedText = String(window.getSelection ? window.getSelection() : "").trim();
     const items = selectedText ? getSpeechItemsFromText(selectedText) : getReadableSpeechItems();
-    const text = items.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim().slice(0, 24000);
+    const plan = await buildSpeechPlan(items, selectedText ? "Selected text" : "Page content", !selectedText);
 
-    if (!text) {
+    if (!plan) {
       return { ok: false, message: "No readable text found on this page." };
     }
 
     stopSpeech();
 
-    const voices = await getSpeechVoices();
-    const documentLanguage = inferSpeechLanguage(text) || getDocumentLanguage() || navigator.language || "";
-    const fallbackVoice = chooseSpeechVoice(voices, text);
-    const chunks = splitSpeechItems(items, documentLanguage);
-    speakSpeechChunks(chunks, voices, fallbackVoice, documentLanguage);
+    speakSpeechChunks(plan.chunks, plan.voices, plan.fallbackVoice, plan.documentLanguage, plan);
 
-    const languageCount = countSpeechLanguages(chunks);
-    const voiceLabel = fallbackVoice ? ` with ${fallbackVoice.name} (${fallbackVoice.lang})` : "";
-    const segmentLabel = chunks.length === 1 ? "1 segment" : `${chunks.length} segments`;
+    const languageCount = countSpeechLanguages(plan.chunks);
+    const voiceLabel = plan.fallbackVoice ? ` with ${plan.fallbackVoice.name} (${plan.fallbackVoice.lang})` : "";
+    const segmentLabel = plan.chunks.length === 1 ? "1 segment" : `${plan.chunks.length} segments`;
     const languageLabel = languageCount > 1 ? ` across ${languageCount} languages` : "";
     return { ok: true, message: selectedText ? `Reading selected text${voiceLabel}.` : `Reading page content${voiceLabel} in ${segmentLabel}${languageLabel}.` };
   }
@@ -5612,13 +6063,13 @@ html.av-guide-line #accessiview-reading-guide {
     }
 
     stopSpeech();
-    const voices = await getSpeechVoices();
-    const documentLanguage = inferSpeechLanguage(normalized) || getDocumentLanguage() || navigator.language || "";
-    const fallbackVoice = chooseSpeechVoice(voices, normalized);
-    const chunks = splitSpeechItems(getSpeechItemsFromText(normalized), documentLanguage);
-    speakSpeechChunks(chunks, voices, fallbackVoice, documentLanguage);
+    const plan = await buildSpeechPlan(getSpeechItemsFromText(normalized), label || "Provided text", false);
+    if (!plan) {
+      return { ok: false, message: "No text provided to read." };
+    }
+    speakSpeechChunks(plan.chunks, plan.voices, plan.fallbackVoice, plan.documentLanguage, plan);
 
-    const segmentLabel = chunks.length === 1 ? "1 segment" : `${chunks.length} segments`;
+    const segmentLabel = plan.chunks.length === 1 ? "1 segment" : `${plan.chunks.length} segments`;
     return { ok: true, message: `Reading ${label || "text"} in ${segmentLabel}.` };
   }
 
@@ -5635,18 +6086,24 @@ html.av-guide-line #accessiview-reading-guide {
     }
   }
 
-  function speakSpeechChunks(chunks, voices, fallbackVoice, fallbackLanguage) {
+  function speakSpeechChunks(chunks, voices, fallbackVoice, fallbackLanguage, speechMeta, startIndex = 0) {
     activeSpeech = {
       chunks,
       voices,
       fallbackVoice,
       fallbackLanguage,
-      index: 0,
+      index: clamp(Math.round(Number(startIndex) || 0), 0, Math.max(0, chunks.length - 1)),
       sessionId: speechSessionId,
-      paused: false
+      paused: false,
+      key: speechMeta && speechMeta.key || "",
+      title: speechMeta && speechMeta.title || document.title || "This page",
+      url: speechMeta && speechMeta.url || window.location.href,
+      label: speechMeta && speechMeta.label || "Page reading",
+      sourceHash: speechMeta && speechMeta.sourceHash || "",
+      persist: Boolean(speechMeta && speechMeta.persist)
     };
 
-    speakSpeechIndex(0);
+    speakSpeechIndex(activeSpeech.index);
   }
 
   function speakSpeechIndex(index) {
@@ -5666,6 +6123,7 @@ html.av-guide-line #accessiview-reading-guide {
     const sessionId = activeSpeech.sessionId;
     const chunk = chunks[index];
     updateSpeechHighlight(chunk, index, chunks.length);
+    persistActiveSpeechProgress();
     const voice = getSpeechVoiceForChunk(activeSpeech.voices, chunk, activeSpeech.fallbackVoice);
     const language = voice ? voice.lang : chunk.language || activeSpeech.fallbackLanguage || "";
     const utterance = new SpeechSynthesisUtterance(chunk.text);
@@ -5705,6 +6163,36 @@ html.av-guide-line #accessiview-reading-guide {
       queueNextSpeechChunk(sessionId, 80, () => speakSpeechIndex(index + 1));
     };
     window.speechSynthesis.speak(utterance);
+  }
+
+  function getActiveSpeechProgressSnapshot() {
+    if (!activeSpeech || !activeSpeech.persist || !activeSpeech.key) {
+      return null;
+    }
+
+    const chunk = activeSpeech.chunks[activeSpeech.index] || {};
+    return {
+      url: activeSpeech.url,
+      title: activeSpeech.title,
+      label: activeSpeech.label,
+      sourceHash: activeSpeech.sourceHash,
+      index: activeSpeech.index,
+      total: activeSpeech.chunks.length,
+      text: chunk.text || ""
+    };
+  }
+
+  function persistActiveSpeechProgress() {
+    const snapshot = getActiveSpeechProgressSnapshot();
+    if (!snapshot) {
+      return;
+    }
+
+    const key = activeSpeech.key;
+    safeStorageGet("local", SPEECH_PROGRESS_KEY, (result) => {
+      const store = upsertSpeechProgress(withSpeechProgressStore(result[SPEECH_PROGRESS_KEY]), key, snapshot);
+      safeStorageSet("local", { [SPEECH_PROGRESS_KEY]: store });
+    });
   }
 
   function pauseSpeech() {
@@ -5763,7 +6251,9 @@ html.av-guide-line #accessiview-reading-guide {
       paused: Boolean(activeSpeech.paused || ("speechSynthesis" in window && window.speechSynthesis.paused)),
       index: activeSpeech.index,
       total: activeSpeech.chunks.length,
-      text: activeSpeech.chunks[activeSpeech.index] ? activeSpeech.chunks[activeSpeech.index].text : ""
+      text: activeSpeech.chunks[activeSpeech.index] ? activeSpeech.chunks[activeSpeech.index].text : "",
+      label: activeSpeech.label || "Page reading",
+      canBookmark: Boolean(activeSpeech.persist && activeSpeech.key)
     };
   }
 

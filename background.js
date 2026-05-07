@@ -190,4 +190,11 @@ chrome.runtime.onInstalled.addListener(() => {
       [config.SUMMARY_CACHE_KEY]: config.withSummaryCache(existing)
     });
   });
+
+  chrome.storage.local.get(config.SPEECH_PROGRESS_KEY, (result) => {
+    const existing = result[config.SPEECH_PROGRESS_KEY];
+    chrome.storage.local.set({
+      [config.SPEECH_PROGRESS_KEY]: config.withSpeechProgressStore(existing)
+    });
+  });
 });

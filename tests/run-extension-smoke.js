@@ -600,6 +600,12 @@ async function run() {
     const optionsResult = await optionsPage.evaluate(() => ({
       hasSummaryEngine: Boolean(document.querySelector("[data-path='summary.engine']")),
       hasSummaryCacheClear: Boolean(document.getElementById("clearSummaryCache")),
+      hasSiteRuleManager: Boolean(
+        document.getElementById("siteRuleSelect") &&
+        document.getElementById("saveSiteRule") &&
+        document.getElementById("validateSiteRule") &&
+        document.getElementById("siteRuleMainSelectors")
+      ),
       hasDisabledButtonStyle: (() => {
         const button = document.getElementById("applyProfile");
         if (!button || !button.disabled) {
@@ -656,6 +662,21 @@ async function run() {
         return panel ? panel.getAttribute("role") : "";
       })()
     }));
+    const auditIssueResult = await sendMessageToFixture(optionsPage, "/article.html", {
+      type: "ACCESSIVIEW_GET_AUDIT"
+    });
+    const firstAuditIssue = auditIssueResult && auditIssueResult.audit
+      ? (auditIssueResult.audit.recommendations || []).flatMap((recommendation) => recommendation.issues || [])[0]
+      : null;
+    const auditHighlightResult = firstAuditIssue && firstAuditIssue.selector
+      ? await sendMessageToFixture(optionsPage, "/article.html", {
+        type: "ACCESSIVIEW_HIGHLIGHT_SELECTOR",
+        selector: firstAuditIssue.selector,
+        label: firstAuditIssue.label
+      })
+      : { ok: false };
+    const auditHighlightDomResult = await articlePage.evaluate(() => Boolean(document.getElementById("accessiview-audit-highlight-host")));
+
     const resultsPage = await context.newPage();
     await resultsPage.goto(`${baseUrl}/results.html`);
     await resultsPage.waitForFunction(() => document.documentElement.classList.contains("av-mode-simplify"));
@@ -703,6 +724,9 @@ async function run() {
         plainLanguage: true,
         cache: false
       }
+    });
+    const speechProgressResult = await sendMessageToFixture(optionsPage, "/article.html", {
+      type: "ACCESSIVIEW_GET_SPEECH_PROGRESS"
     });
     await setSettings(optionsPage, {
       enabled: true,
@@ -761,6 +785,8 @@ async function run() {
       hasSpeechControls: Boolean(document.getElementById("pauseRead") && document.getElementById("nextRead")),
       hasSidePanelButton: Boolean(document.getElementById("openSidePanel")),
       hasSummaryControls: Boolean(document.getElementById("summarizePage") && document.getElementById("summaryOutput")),
+      hasSetupWizard: Boolean(document.getElementById("applySetupWizard") && document.querySelectorAll("[data-setup-need]").length >= 6),
+      hasSpeechResumeControls: Boolean(document.getElementById("resumeSavedRead") && document.getElementById("bookmarkRead") && document.getElementById("speechBookmarks")),
       disablesPrerequisiteActions: Boolean(
         document.getElementById("applyAuditFixes") &&
         document.getElementById("applyAuditFixes").disabled &&
@@ -807,7 +833,7 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -852,11 +878,17 @@ async function run() {
     if (!tabOrderResult.ok || !tabOrderResult.tabOrder || tabOrderResult.tabOrder.counts.focusTargets < 1 || tabOrderResult.tabOrder.counts.missingNames !== 0 || !tabOrderResult.tabOrder.items[0].selector) {
       throw new Error("Tab order fixture failed AccessiView assertions.");
     }
-    if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear || !optionsResult.hasDisabledButtonStyle || !optionsResult.hasReadableActivePresetDescription) {
+    if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear || !optionsResult.hasSiteRuleManager || !optionsResult.hasDisabledButtonStyle || !optionsResult.hasReadableActivePresetDescription) {
       throw new Error("Options fixture failed summary control assertions.");
     }
-    if (!summaryResult.ok || summaryResult.method !== "extractive" || !String(summaryResult.summary || "").includes("- ")) {
+    if (!auditIssueResult.ok || !auditIssueResult.audit || !(auditIssueResult.audit.issueGroups || []).length || !(auditIssueResult.audit.recommendations || []).some((recommendation) => Array.isArray(recommendation.issues) && recommendation.issues.length) || !auditHighlightResult.ok || !auditHighlightDomResult) {
+      throw new Error("Audit issue explorer failed detail or highlight assertions.");
+    }
+    if (!summaryResult.ok || summaryResult.method !== "extractive" || !String(summaryResult.summary || "").includes("- ") || !Array.isArray(summaryResult.summaryItems) || !summaryResult.summaryItems.length || !summaryResult.summaryItems[0].selector) {
       throw new Error("Summary fixture failed AccessiView assertions.");
+    }
+    if (!speechProgressResult.ok || speechProgressResult.active || !Array.isArray(speechProgressResult.bookmarks)) {
+      throw new Error("Speech progress fixture failed idle status assertions.");
     }
     if (!focusReaderResult.hasReader || focusReaderResult.linkText !== "reader details link" || !focusReaderResult.linkHref.includes("/article.html#details") || focusReaderResult.linkTabIndex < 0) {
       throw new Error("Focus reader failed link preservation assertions.");
@@ -870,7 +902,7 @@ async function run() {
     if (!readableColorResult.allReadable) {
       throw new Error("Readable color fallback assertions failed for custom color settings.");
     }
-    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.disablesPrerequisiteActions || !popupResult.hasDisabledButtonStyle || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
+    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasSetupWizard || !popupResult.hasSpeechResumeControls || !popupResult.disablesPrerequisiteActions || !popupResult.hasDisabledButtonStyle || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
       throw new Error("Popup fixture failed AccessiView assertions.");
     }
   } finally {

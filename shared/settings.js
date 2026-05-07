@@ -4,10 +4,13 @@
   const PROFILE_STORAGE_KEY = "accessiview_profiles_v1";
   const HISTORY_STORAGE_KEY = "accessiview_settings_history_v1";
   const SUMMARY_CACHE_KEY = "accessiview_summary_cache_v1";
+  const SPEECH_PROGRESS_KEY = "accessiview_speech_progress_v1";
   const MAX_SITE_SETTINGS = 80;
   const MAX_PROFILES = 40;
   const MAX_HISTORY_ENTRIES = 16;
   const MAX_SUMMARY_CACHE_ENTRIES = 30;
+  const MAX_SPEECH_PROGRESS_PAGES = 30;
+  const MAX_SPEECH_BOOKMARKS_PER_PAGE = 20;
 
   const DEFAULT_SETTINGS = {
     schemaVersion: 1,
@@ -144,6 +147,11 @@
   const DEFAULT_SUMMARY_CACHE = {
     schemaVersion: 1,
     entries: {}
+  };
+
+  const DEFAULT_SPEECH_PROGRESS_STORE = {
+    schemaVersion: 1,
+    pages: {}
   };
 
   const SITE_RULE_PACKS = {
@@ -601,6 +609,10 @@
     return pruneSummaryCache(mergeDeep(DEFAULT_SUMMARY_CACHE, value || {}));
   }
 
+  function withSpeechProgressStore(value) {
+    return pruneSpeechProgressStore(mergeDeep(DEFAULT_SPEECH_PROGRESS_STORE, value || {}));
+  }
+
   function applyPreset(settings, presetId) {
     const preset = PRESETS[presetId];
     if (!preset) {
@@ -954,6 +966,7 @@
 
     cache.entries[key] = Object.assign({}, entry, {
       key,
+      summaryItems: Array.isArray(entry.summaryItems) ? entry.summaryItems.slice(0, 12) : [],
       createdAt: entry.createdAt || new Date().toISOString(),
       lastUsed: new Date().toISOString()
     });
@@ -974,17 +987,142 @@
     return cache;
   }
 
+  function getSpeechProgressEntry(speechProgressStore, key) {
+    const store = withSpeechProgressStore(speechProgressStore);
+    return key && store.pages[key] ? store.pages[key] : null;
+  }
+
+  function upsertSpeechProgress(speechProgressStore, key, entry) {
+    const store = withSpeechProgressStore(speechProgressStore);
+    if (!key || !entry) {
+      return store;
+    }
+
+    const existing = store.pages[key] || {};
+    store.pages[key] = Object.assign({}, existing, {
+      key,
+      url: String(entry.url || existing.url || "").slice(0, 2000),
+      title: String(entry.title || existing.title || "This page").slice(0, 160),
+      label: String(entry.label || existing.label || "Page reading").slice(0, 80),
+      sourceHash: String(entry.sourceHash || existing.sourceHash || "").slice(0, 120),
+      index: Math.max(0, Number(entry.index) || 0),
+      total: Math.max(0, Number(entry.total) || 0),
+      text: String(entry.text || "").slice(0, 220),
+      lastUpdated: new Date().toISOString(),
+      bookmarks: normalizeSpeechBookmarks(existing.bookmarks)
+    });
+
+    return pruneSpeechProgressStore(store);
+  }
+
+  function removeSpeechProgress(speechProgressStore, key) {
+    const store = withSpeechProgressStore(speechProgressStore);
+    if (key) {
+      delete store.pages[key];
+    }
+    return store;
+  }
+
+  function addSpeechBookmark(speechProgressStore, key, bookmark) {
+    const store = withSpeechProgressStore(speechProgressStore);
+    if (!key || !bookmark) {
+      return store;
+    }
+
+    const existing = store.pages[key] || {
+      key,
+      url: "",
+      title: "This page",
+      label: "Page reading",
+      sourceHash: "",
+      index: 0,
+      total: 0,
+      text: "",
+      lastUpdated: new Date().toISOString(),
+      bookmarks: []
+    };
+    const index = Math.max(0, Number(bookmark.index) || 0);
+    const bookmarkEntry = {
+      id: `bookmark_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      index,
+      label: String(bookmark.label || `Segment ${index + 1}`).slice(0, 80),
+      text: String(bookmark.text || "").slice(0, 220),
+      createdAt: new Date().toISOString()
+    };
+
+    store.pages[key] = Object.assign({}, existing, {
+      bookmarks: [bookmarkEntry].concat(normalizeSpeechBookmarks(existing.bookmarks).filter((item) => item.index !== index)),
+      lastUpdated: new Date().toISOString()
+    });
+
+    return pruneSpeechProgressStore(store);
+  }
+
+  function removeSpeechBookmark(speechProgressStore, key, bookmarkId) {
+    const store = withSpeechProgressStore(speechProgressStore);
+    const entry = key && store.pages[key];
+    if (entry) {
+      entry.bookmarks = normalizeSpeechBookmarks(entry.bookmarks)
+        .filter((bookmark) => bookmark.id !== bookmarkId);
+      entry.lastUpdated = new Date().toISOString();
+    }
+    return store;
+  }
+
+  function pruneSpeechProgressStore(speechProgressStore) {
+    const store = mergeDeep(DEFAULT_SPEECH_PROGRESS_STORE, speechProgressStore || {});
+    const entries = Object.entries(store.pages || {})
+      .filter((entry) => entry[1] && (entry[1].url || entry[1].title))
+      .map(([key, entry]) => {
+        return [key, {
+          key,
+          url: String(entry.url || "").slice(0, 2000),
+          title: String(entry.title || "This page").slice(0, 160),
+          label: String(entry.label || "Page reading").slice(0, 80),
+          sourceHash: String(entry.sourceHash || "").slice(0, 120),
+          index: Math.max(0, Number(entry.index) || 0),
+          total: Math.max(0, Number(entry.total) || 0),
+          text: String(entry.text || "").slice(0, 220),
+          lastUpdated: entry.lastUpdated || entry.createdAt || new Date().toISOString(),
+          bookmarks: normalizeSpeechBookmarks(entry.bookmarks)
+        }];
+      })
+      .sort((first, second) => {
+        return String(second[1].lastUpdated || "").localeCompare(String(first[1].lastUpdated || ""));
+      })
+      .slice(0, MAX_SPEECH_PROGRESS_PAGES);
+
+    store.pages = Object.fromEntries(entries);
+    return store;
+  }
+
+  function normalizeSpeechBookmarks(bookmarks) {
+    return (Array.isArray(bookmarks) ? bookmarks : [])
+      .filter(Boolean)
+      .map((bookmark) => ({
+        id: String(bookmark.id || `bookmark_${Date.now().toString(36)}`).slice(0, 80),
+        index: Math.max(0, Number(bookmark.index) || 0),
+        label: String(bookmark.label || `Segment ${(Number(bookmark.index) || 0) + 1}`).slice(0, 80),
+        text: String(bookmark.text || "").slice(0, 220),
+        createdAt: bookmark.createdAt || new Date().toISOString()
+      }))
+      .sort((first, second) => String(second.createdAt || "").localeCompare(String(first.createdAt || "")))
+      .slice(0, MAX_SPEECH_BOOKMARKS_PER_PAGE);
+  }
+
   global.AccessiViewConfig = {
     STORAGE_KEY,
     SITE_STORAGE_KEY,
     PROFILE_STORAGE_KEY,
     HISTORY_STORAGE_KEY,
     SUMMARY_CACHE_KEY,
+    SPEECH_PROGRESS_KEY,
     DEFAULT_SETTINGS,
     DEFAULT_SITE_STORE,
     DEFAULT_PROFILE_STORE,
     DEFAULT_HISTORY_STORE,
     DEFAULT_SUMMARY_CACHE,
+    DEFAULT_SPEECH_PROGRESS_STORE,
     SITE_RULE_PACKS,
     PRESETS,
     clone,
@@ -994,6 +1132,7 @@
     withProfileStore,
     withHistoryStore,
     withSummaryCache,
+    withSpeechProgressStore,
     applyPreset,
     removePreset,
     clearActivePreset,
@@ -1020,6 +1159,12 @@
     addHistoryEntry,
     removeHistoryEntry,
     upsertSummaryCache,
-    pruneSummaryCache
+    pruneSummaryCache,
+    getSpeechProgressEntry,
+    upsertSpeechProgress,
+    removeSpeechProgress,
+    addSpeechBookmark,
+    removeSpeechBookmark,
+    pruneSpeechProgressStore
   };
 })(typeof globalThis !== "undefined" ? globalThis : window);
