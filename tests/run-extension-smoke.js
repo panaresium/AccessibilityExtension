@@ -753,6 +753,19 @@ async function run() {
     const speechProgressResult = await sendMessageToFixture(optionsPage, "/article.html", {
       type: "ACCESSIVIEW_GET_SPEECH_PROGRESS"
     });
+    const longSpeechPage = await context.newPage();
+    await longSpeechPage.goto(`${baseUrl}/long-speech.html`);
+    await longSpeechPage.waitForSelector("article p:nth-of-type(100)");
+    const longSpeechReadResult = await sendMessageToFixture(optionsPage, "/long-speech.html", {
+      type: "ACCESSIVIEW_READ"
+    });
+    const longSpeechStatusResult = await sendMessageToFixture(optionsPage, "/long-speech.html", {
+      type: "ACCESSIVIEW_GET_SPEECH_STATUS"
+    });
+    await sendMessageToFixture(optionsPage, "/long-speech.html", {
+      type: "ACCESSIVIEW_STOP_READING"
+    });
+    await longSpeechPage.close();
     await setSettings(optionsPage, {
       enabled: true,
       modes: {
@@ -858,7 +871,7 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, aiVerificationPolicyResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, aiVerificationPolicyResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, longSpeechReadResult, longSpeechStatusResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -917,6 +930,9 @@ async function run() {
     }
     if (!speechProgressResult.ok || speechProgressResult.active || !Array.isArray(speechProgressResult.bookmarks)) {
       throw new Error("Speech progress fixture failed idle status assertions.");
+    }
+    if (!longSpeechReadResult.ok || !longSpeechStatusResult.active || longSpeechStatusResult.total < 40 || longSpeechStatusResult.total > 90) {
+      throw new Error("Long speech fixture failed capped queue assertions.");
     }
     if (!focusReaderResult.hasReader || focusReaderResult.linkText !== "reader details link" || !focusReaderResult.linkHref.includes("/article.html#details") || focusReaderResult.linkTabIndex < 0) {
       throw new Error("Focus reader failed link preservation assertions.");

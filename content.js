@@ -107,6 +107,7 @@
     "[data-av-focus-background]"
   ].join(",");
   const CONTRAST_OVERRIDE_SELECTOR = "[data-av-contrast-color]";
+  const PAGE_SPEECH_TEXT_LIMIT = 24000;
   const SIMPLIFY_OVERRIDE_SELECTOR = [
     "[data-av-simplify-main]",
     "[data-av-simplify-chain]",
@@ -5919,7 +5920,8 @@ html.av-guide-line #accessiview-reading-guide {
   }
 
   async function buildSpeechPlan(items, label, persist) {
-    const text = items.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim().slice(0, 24000);
+    const cappedItems = limitSpeechItems(items, PAGE_SPEECH_TEXT_LIMIT);
+    const text = cappedItems.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim();
     if (!text) {
       return null;
     }
@@ -5927,7 +5929,7 @@ html.av-guide-line #accessiview-reading-guide {
     const voices = await getSpeechVoices();
     const documentLanguage = inferSpeechLanguage(text) || getDocumentLanguage() || navigator.language || "";
     const fallbackVoice = chooseSpeechVoice(voices, text);
-    const chunks = splitSpeechItems(items, documentLanguage);
+    const chunks = splitSpeechItems(cappedItems, documentLanguage);
     const sourceHash = await hashText(text);
     const key = persist ? await getSpeechPageKey() : "";
 
@@ -5944,6 +5946,41 @@ html.av-guide-line #accessiview-reading-guide {
       documentLanguage,
       persist: Boolean(persist)
     };
+  }
+
+  function limitSpeechItems(items, maxLength) {
+    const cappedItems = [];
+    let remaining = Math.max(0, Number(maxLength) || 0);
+
+    (items || []).some((item) => {
+      if (remaining <= 0) {
+        return true;
+      }
+
+      const text = normalizeSpeechText(item && item.text);
+      if (!text) {
+        return false;
+      }
+
+      const separatorLength = cappedItems.length ? 1 : 0;
+      const availableLength = remaining - separatorLength;
+      if (availableLength <= 0) {
+        return true;
+      }
+
+      const nextText = text.length > availableLength ? text.slice(0, availableLength).trim() : text;
+      if (nextText) {
+        cappedItems.push({
+          type: item.type || "paragraph",
+          text: nextText
+        });
+        remaining -= separatorLength + nextText.length;
+      }
+
+      return remaining <= 0;
+    });
+
+    return cappedItems;
   }
 
   async function getCurrentPageSpeechPlan() {

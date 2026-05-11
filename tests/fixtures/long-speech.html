@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>AccessiView Long Speech Fixture</title>
+    <style>
+      body {
+        margin: 0;
+        color: #111827;
+        background: #ffffff;
+        font-family: Arial, sans-serif;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <article id="story">
+        <h1>Long Speech Fixture</h1>
+      </article>
+    </main>
+    <script>
+      const story = document.getElementById("story");
+      const sentence = "This paragraph is intentionally repetitive so the read aloud planner has many readable sections while keeping deterministic chunk lengths for the smoke test. It should be long enough to become one speech segment when the extension prepares the page for reading.";
+      for (let index = 0; index < 140; index += 1) {
+        const paragraph = document.createElement("p");
+        paragraph.textContent = `${sentence} Paragraph ${index + 1}.`;
+        story.appendChild(paragraph);
+      }
+    </script>
+  </body>
+</html>
