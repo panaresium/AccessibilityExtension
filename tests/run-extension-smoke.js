@@ -648,6 +648,20 @@ async function run() {
         }
         button.classList.add("is-active");
         return getComputedStyle(description).color === "rgb(255, 255, 255)";
+      })(),
+      hasCollapsibleButtonControls: (() => {
+        const buttons = Array.from(document.querySelectorAll(".collapse-button"));
+        return buttons.length > 0 && buttons.every((button) => {
+          const controls = button.getAttribute("aria-controls");
+          const body = controls ? document.getElementById(controls) : null;
+          return Boolean(
+            controls &&
+            body &&
+            body.classList.contains("collapse-body") &&
+            button.getAttribute("aria-label") &&
+            /^(true|false)$/.test(button.getAttribute("aria-expanded") || "")
+          );
+        });
       })()
     }));
     const activeTabBridgeResult = await validateActiveTabMessageBridge(context, optionsPage, baseUrl);
@@ -868,6 +882,20 @@ async function run() {
       hasSummaryResultRegion: (() => {
         const element = document.getElementById("summaryOutput");
         return Boolean(element && element.getAttribute("role") === "region" && element.getAttribute("aria-live") === "polite");
+      })(),
+      hasCollapsibleButtonControls: (() => {
+        const buttons = Array.from(document.querySelectorAll(".collapse-button"));
+        return buttons.length > 0 && buttons.every((button) => {
+          const controls = button.getAttribute("aria-controls");
+          const body = controls ? document.getElementById(controls) : null;
+          return Boolean(
+            controls &&
+            body &&
+            body.classList.contains("collapse-body") &&
+            button.getAttribute("aria-label") &&
+            /^(true|false)$/.test(button.getAttribute("aria-expanded") || "")
+          );
+        });
       })()
     }));
 
@@ -919,7 +947,7 @@ async function run() {
     if (!tabOrderResult.ok || !tabOrderResult.tabOrder || tabOrderResult.tabOrder.counts.focusTargets < 1 || tabOrderResult.tabOrder.counts.missingNames !== 0 || !tabOrderResult.tabOrder.items[0].selector) {
       throw new Error("Tab order fixture failed AccessiView assertions.");
     }
-    if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear || !optionsResult.hasSiteRuleManager || !optionsResult.hasDisabledButtonStyle || !optionsResult.hasReadableActivePresetDescription) {
+    if (!optionsResult.hasSummaryEngine || !optionsResult.hasSummaryCacheClear || !optionsResult.hasSiteRuleManager || !optionsResult.hasDisabledButtonStyle || !optionsResult.hasReadableActivePresetDescription || !optionsResult.hasCollapsibleButtonControls) {
       throw new Error("Options fixture failed summary control assertions.");
     }
     if (!auditIssueResult.ok || !auditIssueResult.audit || !(auditIssueResult.audit.issueGroups || []).length || !(auditIssueResult.audit.recommendations || []).some((recommendation) => Array.isArray(recommendation.issues) && recommendation.issues.length) || !auditHighlightResult.ok || !auditHighlightDomResult) {
@@ -946,7 +974,7 @@ async function run() {
     if (!readableColorResult.allReadable) {
       throw new Error("Readable color fallback assertions failed for custom color settings.");
     }
-    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasSetupWizard || !popupResult.hasSpeechResumeControls || !popupResult.disablesPrerequisiteActions || !popupResult.hasDisabledButtonStyle || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion) {
+    if (popupResult.presets < 13 || !popupResult.hasPicker || !popupResult.hasUndo || !popupResult.hasSpeechControls || !popupResult.hasSidePanelButton || !popupResult.hasSummaryControls || !popupResult.hasSetupWizard || !popupResult.hasSpeechResumeControls || !popupResult.disablesPrerequisiteActions || !popupResult.hasDisabledButtonStyle || !popupResult.hasStructureControls || !popupResult.hasNamedModeSwitches || !popupResult.hasSwitchFocusStyle || !popupResult.hasReadableActivePresetDescription || !popupResult.hasLiveStatusRegions || !popupResult.hasSummaryResultRegion || !popupResult.hasCollapsibleButtonControls) {
       throw new Error("Popup fixture failed AccessiView assertions.");
     }
   } finally {

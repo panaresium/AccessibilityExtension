@@ -505,12 +505,14 @@
       const startCollapsed = saved === null ? section.classList.contains("mode-card") : saved === "true";
 
       body.className = "collapse-body";
+      body.id = `accessiview-popup-collapse-${index}`;
       while (header.nextSibling) {
         body.appendChild(header.nextSibling);
       }
 
       button.type = "button";
       button.className = "collapse-button";
+      button.setAttribute("aria-controls", body.id);
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         const collapsed = !section.classList.contains("is-collapsed");

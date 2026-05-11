@@ -328,12 +328,14 @@
       const startCollapsed = saved === null ? true : saved === "true";
 
       body.className = "collapse-body";
+      body.id = `accessiview-options-collapse-${index}`;
       while (header.nextSibling) {
         body.appendChild(header.nextSibling);
       }
 
       button.type = "button";
       button.className = "collapse-button";
+      button.setAttribute("aria-controls", body.id);
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         const collapsed = !section.classList.contains("is-collapsed");
