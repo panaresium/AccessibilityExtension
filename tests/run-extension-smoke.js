@@ -651,7 +651,28 @@ async function run() {
       })(),
       hasCollapsibleButtonControls: (() => {
         const buttons = Array.from(document.querySelectorAll(".collapse-button"));
-        return buttons.length > 0 && buttons.every((button) => {
+        const controlIds = buttons.map((button) => button.getAttribute("aria-controls"));
+        const hasUniqueControls = new Set(controlIds).size === controlIds.length;
+        const firstButton = buttons[0];
+        const firstBody = firstButton && document.getElementById(firstButton.getAttribute("aria-controls") || "");
+        const initialExpanded = firstButton ? firstButton.getAttribute("aria-expanded") : null;
+        const initialHidden = firstBody ? firstBody.hidden : null;
+        const togglesState = (() => {
+          if (!firstButton || !firstBody) {
+            return false;
+          }
+
+          firstButton.click();
+          const toggledExpanded = firstButton.getAttribute("aria-expanded");
+          const toggledHidden = firstBody.hidden;
+          firstButton.click();
+          return toggledExpanded !== initialExpanded &&
+            toggledHidden !== initialHidden &&
+            (toggledExpanded === "true") === !toggledHidden &&
+            firstButton.getAttribute("aria-expanded") === initialExpanded &&
+            firstBody.hidden === initialHidden;
+        })();
+        return buttons.length > 0 && hasUniqueControls && togglesState && buttons.every((button) => {
           const controls = button.getAttribute("aria-controls");
           const body = controls ? document.getElementById(controls) : null;
           return Boolean(
@@ -885,7 +906,28 @@ async function run() {
       })(),
       hasCollapsibleButtonControls: (() => {
         const buttons = Array.from(document.querySelectorAll(".collapse-button"));
-        return buttons.length > 0 && buttons.every((button) => {
+        const controlIds = buttons.map((button) => button.getAttribute("aria-controls"));
+        const hasUniqueControls = new Set(controlIds).size === controlIds.length;
+        const firstButton = buttons[0];
+        const firstBody = firstButton && document.getElementById(firstButton.getAttribute("aria-controls") || "");
+        const initialExpanded = firstButton ? firstButton.getAttribute("aria-expanded") : null;
+        const initialHidden = firstBody ? firstBody.hidden : null;
+        const togglesState = (() => {
+          if (!firstButton || !firstBody) {
+            return false;
+          }
+
+          firstButton.click();
+          const toggledExpanded = firstButton.getAttribute("aria-expanded");
+          const toggledHidden = firstBody.hidden;
+          firstButton.click();
+          return toggledExpanded !== initialExpanded &&
+            toggledHidden !== initialHidden &&
+            (toggledExpanded === "true") === !toggledHidden &&
+            firstButton.getAttribute("aria-expanded") === initialExpanded &&
+            firstBody.hidden === initialHidden;
+        })();
+        return buttons.length > 0 && hasUniqueControls && togglesState && buttons.every((button) => {
           const controls = button.getAttribute("aria-controls");
           const body = controls ? document.getElementById(controls) : null;
           return Boolean(
