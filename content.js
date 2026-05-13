@@ -5552,8 +5552,13 @@ html.av-guide-line #accessiview-reading-guide {
   function isSensitiveSummaryPage() {
     const sensitiveSelector = [
       "input[type='password']",
+      "input[autocomplete~='cc-name' i]",
       "input[autocomplete~='cc-number' i]",
+      "input[autocomplete~='cc-exp' i]",
+      "input[autocomplete~='cc-exp-month' i]",
+      "input[autocomplete~='cc-exp-year' i]",
       "input[autocomplete~='cc-csc' i]",
+      "input[autocomplete~='cc-type' i]",
       "input[name*='card' i]",
       "input[id*='card' i]",
       "input[name*='cvv' i]",

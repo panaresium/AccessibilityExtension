@@ -811,6 +811,20 @@ async function run() {
         cache: false
       }
     });
+    const paymentMetadataPage = await context.newPage();
+    await paymentMetadataPage.goto(`${baseUrl}/payment-metadata.html`);
+    await paymentMetadataPage.waitForSelector("input[autocomplete='cc-exp']");
+    const paymentMetadataSummaryResult = await sendMessageToFixture(optionsPage, "/payment-metadata.html", {
+      type: "ACCESSIVIEW_SUMMARIZE_PAGE",
+      options: {
+        engine: "extractive",
+        length: "short",
+        format: "bullets",
+        plainLanguage: true,
+        cache: false
+      }
+    });
+    await paymentMetadataPage.close();
     const readableColorResult = await validateReadableColorFallbacks(context, optionsPage, baseUrl);
 
     const popupPage = await context.newPage();
@@ -871,7 +885,7 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, aiVerificationPolicyResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, longSpeechReadResult, longSpeechStatusResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, aiVerificationPolicyResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, longSpeechReadResult, longSpeechStatusResult, focusReaderResult, formResult, formSummaryResult, paymentMetadataSummaryResult, readableColorResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -942,6 +956,9 @@ async function run() {
     }
     if (formSummaryResult.ok || !String(formSummaryResult.message || "").includes("Summary is disabled")) {
       throw new Error("Sensitive form fixture failed summary privacy assertions.");
+    }
+    if (paymentMetadataSummaryResult.ok || !String(paymentMetadataSummaryResult.message || "").includes("Summary is disabled")) {
+      throw new Error("Payment metadata fixture failed summary privacy assertions.");
     }
     if (!readableColorResult.allReadable) {
       throw new Error("Readable color fallback assertions failed for custom color settings.");
