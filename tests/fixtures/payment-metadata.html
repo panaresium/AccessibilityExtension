@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>AccessiView Payment Metadata Fixture</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+
+      main {
+        max-width: 720px;
+        margin: 24px auto;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Payment Metadata Fixture</h1>
+      <p>This checkout-like page has readable text, but local summaries should stay disabled because the form asks for credit-card metadata.</p>
+      <form>
+        <label for="cardholder">Cardholder name</label>
+        <input id="cardholder" autocomplete="cc-name">
+        <label for="expiration">Expiration date</label>
+        <input id="expiration" autocomplete="cc-exp">
+        <button type="submit">Continue</button>
+      </form>
+    </main>
+  </body>
+</html>
