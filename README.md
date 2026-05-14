@@ -11,7 +11,7 @@ AccessiView is a Chrome extension prototype for adapting web pages to user acces
 - High contrast themes with custom colors.
 - Adjustable text size, line height, spacing, and font style.
 - Reduce motion mode for animations, transitions, smooth scrolling, and autoplay media.
-- Main-page and iframe coverage for embedded content where browser extension permissions allow it.
+- Main-page and iframe coverage for embedded content where browser extension permissions allow it, including inherited about:blank/srcdoc frames.
 - Shadow DOM support for common text, motion, navigation, focus-media, autoplay, and missing-alt handling.
 - Instant scrolling coverage for native smooth scroll, keyboard/page scrolling, wheel scrolling, Web Animations API motion, and common jQuery scroll animations.
 - Reading guide that follows the cursor or keyboard focus, with band, ruler, and line styles.
