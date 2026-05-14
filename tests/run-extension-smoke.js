@@ -30,6 +30,7 @@ const requiredCoverageCases = [
   "form-helper",
   "cognitive-support",
   "local-summary",
+  "shadow-dom-and-iframes",
   "popup-options-regression"
 ];
 const minWebsitesPerCoverageCategory = 20;
@@ -54,6 +55,7 @@ function validateManifest() {
       entry.world === "MAIN"
     )),
     allFramesContentScripts: contentScripts.every((entry) => entry.all_frames === true),
+    matchesAboutBlankContentScripts: contentScripts.every((entry) => entry.match_about_blank === true),
     unexpectedPermissions,
     unsafeCsp: extensionPagesCsp ? /'unsafe-eval'|'unsafe-inline'/.test(extensionPagesCsp) : false
   };
@@ -723,6 +725,34 @@ async function run() {
       };
     });
     await resultsPage.close();
+    const shadowIframePage = await context.newPage();
+    await shadowIframePage.goto(`${baseUrl}/shadow-iframe.html`);
+    await shadowIframePage.waitForFunction(() => {
+      const shadowRoot = document.querySelector("shadow-article")?.shadowRoot;
+      const frameDocument = document.querySelector("iframe")?.contentDocument;
+      return Boolean(
+        document.documentElement.classList.contains("av-enabled") &&
+        shadowRoot &&
+        shadowRoot.getElementById("accessiview-shadow-style") &&
+        shadowRoot.querySelector("[data-av-missing-alt='true']") &&
+        frameDocument &&
+        frameDocument.documentElement.classList.contains("av-enabled") &&
+        frameDocument.querySelector("[data-av-missing-alt='true']")
+      );
+    });
+    const shadowIframeResult = await shadowIframePage.evaluate(() => {
+      const shadowRoot = document.querySelector("shadow-article")?.shadowRoot;
+      const frameDocument = document.querySelector("iframe")?.contentDocument;
+
+      return {
+        topFrameEnabled: document.documentElement.classList.contains("av-enabled"),
+        hasShadowStyle: Boolean(shadowRoot && shadowRoot.getElementById("accessiview-shadow-style")),
+        shadowMissingAlt: shadowRoot ? shadowRoot.querySelectorAll("[data-av-missing-alt='true']").length : 0,
+        iframeEnabled: Boolean(frameDocument && frameDocument.documentElement.classList.contains("av-enabled")),
+        iframeMissingAlt: frameDocument ? frameDocument.querySelectorAll("[data-av-missing-alt='true']").length : 0
+      };
+    });
+    await shadowIframePage.close();
     const overlayTabOrderResult = await sendMessageToFixture(optionsPage, "/article.html", {
       type: "ACCESSIVIEW_GET_TAB_ORDER"
     });
@@ -871,10 +901,10 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, aiVerificationPolicyResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, longSpeechReadResult, longSpeechStatusResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, aiVerificationPolicyResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, shadowIframeResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, longSpeechReadResult, longSpeechStatusResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
-    if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
+    if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts || !manifestResult.matchesAboutBlankContentScripts) {
       throw new Error("Manifest failed AccessiView extension wiring assertions.");
     }
     if (manifestResult.unexpectedPermissions.length || manifestResult.unsafeCsp) {
@@ -909,6 +939,9 @@ async function run() {
     }
     if (resultsSimplifyResult.mainId !== "results" || !/\bsearch-results\b/.test(resultsSimplifyResult.mainClass) || resultsSimplifyResult.resultCards < 3 || resultsSimplifyResult.pickedSingleCard || !resultsSimplifyResult.markedRelatedPanel || !resultsSimplifyResult.markedSearchForm || !resultsSimplifyResult.hiddenReasons.includes("sidebar") || !resultsSimplifyResult.hiddenReasons.includes("form")) {
       throw new Error("Search results fixture failed Simplified Page reader assertions.");
+    }
+    if (!shadowIframeResult.topFrameEnabled || !shadowIframeResult.hasShadowStyle || !shadowIframeResult.shadowMissingAlt || !shadowIframeResult.iframeEnabled || !shadowIframeResult.iframeMissingAlt) {
+      throw new Error("Shadow DOM and iframe fixture failed all-frame coverage assertions.");
     }
     if (!structureResult.ok || !structureResult.structure || structureResult.structure.counts.headings < 1 || structureResult.structure.counts.landmarks < 1 || structureResult.structure.counts.missingAlt < 1) {
       throw new Error("Page structure fixture failed AccessiView assertions.");
