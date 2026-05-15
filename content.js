@@ -2789,12 +2789,16 @@ html.av-guide-line #accessiview-reading-guide {
   function applyFocusMediaOverrides() {
     const roots = getQueryableRoots();
     const rule = getCurrentSiteRule();
-    const mediaSelector = rule && rule.mediaSelectors && rule.mediaSelectors.length
-      ? `${FOCUS_MEDIA_SELECTOR},${rule.mediaSelectors.join(",")}`
-      : FOCUS_MEDIA_SELECTOR;
+    const mediaSelectors = [FOCUS_MEDIA_SELECTOR].concat(rule && rule.mediaSelectors ? rule.mediaSelectors : []);
+    const mediaElements = new Set();
+
+    mediaSelectors.forEach((selector) => {
+      queryAllInRoots(roots, selector).forEach((element) => mediaElements.add(element));
+    });
+
+    mediaElements.forEach(hideFocusMediaElement);
 
     roots.forEach((root) => {
-      root.querySelectorAll(mediaSelector).forEach(hideFocusMediaElement);
       root.querySelectorAll("*").forEach(removeFocusBackgroundMedia);
     });
 
@@ -2878,9 +2882,13 @@ html.av-guide-line #accessiview-reading-guide {
   }
 
   function queryAllAcrossRoots(selector) {
+    return queryAllInRoots(getQueryableRoots(), selector);
+  }
+
+  function queryAllInRoots(roots, selector) {
     const results = [];
 
-    getQueryableRoots().forEach((root) => {
+    roots.forEach((root) => {
       try {
         root.querySelectorAll(selector).forEach((element) => {
           results.push(element);

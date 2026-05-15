@@ -312,6 +312,35 @@ async function setSettings(optionsPage, override) {
   }), override);
 }
 
+async function setSiteSettingsAndRule(optionsPage, url, settingsOverride, rule) {
+  await optionsPage.evaluate((payload) => new Promise((resolve) => {
+    const {
+      SITE_STORAGE_KEY,
+      mergeDeep,
+      withDefaults,
+      withSiteStore,
+      upsertSiteSettings,
+      upsertSiteRule
+    } = globalThis.AccessiViewConfig;
+    const settings = withDefaults(mergeDeep(withDefaults({}), payload.settingsOverride));
+    chrome.storage.local.get(SITE_STORAGE_KEY, (result) => {
+      let siteStore = upsertSiteSettings(withSiteStore(result[SITE_STORAGE_KEY]), payload.url, settings);
+      siteStore = upsertSiteRule(siteStore, payload.url, payload.rule);
+      chrome.storage.local.set({ [SITE_STORAGE_KEY]: siteStore }, resolve);
+    });
+  }), { url, settingsOverride, rule });
+}
+
+async function removeSiteSettingsForUrl(optionsPage, url) {
+  await optionsPage.evaluate((targetUrl) => new Promise((resolve) => {
+    const { SITE_STORAGE_KEY, withSiteStore, removeSiteSettings } = globalThis.AccessiViewConfig;
+    chrome.storage.local.get(SITE_STORAGE_KEY, (result) => {
+      const siteStore = removeSiteSettings(withSiteStore(result[SITE_STORAGE_KEY]), targetUrl);
+      chrome.storage.local.set({ [SITE_STORAGE_KEY]: siteStore }, resolve);
+    });
+  }), url);
+}
+
 async function buildSettings(extensionPage, override) {
   return extensionPage.evaluate((settingsOverride) => {
     const { mergeDeep, withDefaults } = globalThis.AccessiViewConfig;
@@ -605,6 +634,50 @@ async function validateActiveTabMessageBridge(context, extensionPage, baseUrl) {
   }
 }
 
+async function validateInvalidMediaSelectorRule(context, extensionPage, baseUrl) {
+  await setSettings(extensionPage, { enabled: true });
+  await setSiteSettingsAndRule(extensionPage, `${baseUrl}/frame-media.html`, {
+    enabled: true,
+    modes: {
+      focus: { enabled: true, textOnly: true }
+    }
+  }, {
+    label: "Invalid media selector fixture",
+    source: "test",
+    mediaSelectors: ["["]
+  });
+
+  const framePage = await context.newPage();
+  const fixtureUrl = `${baseUrl}/frame-media.html`;
+
+  try {
+    await framePage.goto(fixtureUrl);
+    const articleFrame = framePage.frames().find((frame) => frame.url().includes("/article.html?framed=media")) ||
+      await framePage.waitForEvent("frameattached", {
+        predicate: (frame) => frame.url().includes("/article.html?framed=media"),
+        timeout: 5000
+      }).catch(() => null);
+
+    if (!articleFrame) {
+      return { ok: false, message: "Article iframe was not available." };
+    }
+
+    await articleFrame.waitForFunction(() => document.documentElement.classList.contains("av-mode-focus"));
+    return articleFrame.evaluate(() => {
+      const image = document.querySelector("img");
+      const style = image ? getComputedStyle(image) : null;
+      return {
+        ok: Boolean(image && style && style.display === "none"),
+        focus: document.documentElement.classList.contains("av-mode-focus"),
+        imageHidden: Boolean(image && style && style.display === "none")
+      };
+    });
+  } finally {
+    await framePage.close().catch(() => {});
+    await removeSiteSettingsForUrl(extensionPage, fixtureUrl);
+  }
+}
+
 async function run() {
   const manifestResult = validateManifest();
   const automationCoverageResult = validateAutomationCoverage();
@@ -651,6 +724,7 @@ async function run() {
       })()
     }));
     const activeTabBridgeResult = await validateActiveTabMessageBridge(context, optionsPage, baseUrl);
+    const invalidMediaSelectorResult = await validateInvalidMediaSelectorRule(context, optionsPage, baseUrl);
 
     await setSettings(optionsPage, {
       enabled: true,
@@ -871,7 +945,7 @@ async function run() {
       })()
     }));
 
-    const result = { manifestResult, automationCoverageResult, aiVerificationPolicyResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, longSpeechReadResult, longSpeechStatusResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
+    const result = { manifestResult, automationCoverageResult, aiVerificationPolicyResult, popupActiveTabTargetingResult, contentContextGuardResult, settingsMergeSafetyResult, optionsResult, activeTabBridgeResult, invalidMediaSelectorResult, articleResult, auditIssueResult, auditHighlightResult, auditHighlightDomResult, resultsSimplifyResult, overlayTabOrderResult, structureResult, tabOrderResult, summaryResult, speechProgressResult, longSpeechReadResult, longSpeechStatusResult, focusReaderResult, formResult, formSummaryResult, readableColorResult, popupResult };
     console.log(JSON.stringify(result, null, 2));
 
     if (manifestResult.manifestVersion !== 3 || !manifestResult.hasServiceWorker || !manifestResult.hasSettingsBeforeContent || !manifestResult.hasDocumentStartScrollScript || !manifestResult.allFramesContentScripts) {
@@ -897,6 +971,9 @@ async function run() {
     }
     if (!activeTabBridgeResult.firstReady || !activeTabBridgeResult.secondReady || !activeTabBridgeResult.firstResponseTarget.includes("target=first") || !activeTabBridgeResult.secondResponseTarget.includes("target=second") || !activeTabBridgeResult.storageWriteDidNotApplyContrastToSecond || !activeTabBridgeResult.storageWriteDidNotApplyFocusToFirst || !activeTabBridgeResult.firstReceivedInitialContrast || !activeTabBridgeResult.secondStayedUntouchedBeforeSwitch || !activeTabBridgeResult.secondReceivedFocusAfterSwitch || !activeTabBridgeResult.firstDidNotReceiveSecondFocus || !activeTabBridgeResult.firstAppliedCurrentFocusOnReturn || !activeTabBridgeResult.firstClearedPreviousContrastOnReturn) {
       throw new Error("Active tab message bridge failed tab-switch targeting assertions.");
+    }
+    if (!invalidMediaSelectorResult.ok || !invalidMediaSelectorResult.focus || !invalidMediaSelectorResult.imageHidden) {
+      throw new Error("Invalid media selector fixture failed focus-mode resilience assertions.");
     }
     if (!Object.values(contentContextGuardResult).every(Boolean)) {
       throw new Error("Content script extension-context guard assertions failed.");
