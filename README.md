@@ -92,7 +92,7 @@ The `tests` folder contains local fixture pages and a smoke-test runner. It load
 Run it with:
 
 ```powershell
-& 'C:\Users\CPC\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' tests/run-extension-smoke.js
+npm test
 ```
 
 The runner currently checks manifest wiring, reviewed extension permissions, unsafe CSP tokens, article simplification, missing-alt markers, form helper markers, cognitive chunking, the guide overlay, keyboard map, focus-reader link preservation, local extractive summaries, popup controls, and the automation coverage catalog.
