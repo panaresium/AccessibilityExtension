@@ -7,5 +7,8 @@
     "lint": "node tests/run-static-checks.js",
     "test": "node tests/run-extension-smoke.js",
     "validate": "npm run lint && npm test"
+  },
+  "devDependencies": {
+    "playwright": "1.59.1"
   }
 }

@@ -7,8 +7,9 @@ const vm = require("vm");
 function requirePlaywright() {
   try {
     return require("playwright");
-  } catch (_error) {
-    return require("C:/Users/CPC/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright");
+  } catch (error) {
+    error.message = `${error.message}\nInstall test dependencies with \`npm install\` before running the smoke tests.`;
+    throw error;
   }
 }
 
