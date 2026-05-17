@@ -10,6 +10,7 @@ const ignoredPathParts = [
 const jsFiles = [];
 const jsonFiles = [];
 const cssFiles = [];
+const htmlFiles = [];
 const failures = [];
 
 function shouldSkipPath(filePath) {
@@ -51,6 +52,11 @@ function walkDirectory(directory) {
 
     if (entry.name.endsWith(".css")) {
       cssFiles.push(fullPath);
+      return;
+    }
+
+    if (entry.name.endsWith(".html")) {
+      htmlFiles.push(fullPath);
     }
   });
 }
@@ -174,10 +180,50 @@ function checkCssSyntax(filePath) {
   }
 }
 
+function checkHtmlStaticMarkup(filePath) {
+  const source = fs.readFileSync(filePath, "utf8");
+  const ids = new Map();
+  const idPattern = /\bid\s*=\s*(["'])(.*?)\1/gi;
+  let idMatch = idPattern.exec(source);
+
+  while (idMatch) {
+    const id = idMatch[2].trim();
+    if (id) {
+      if (ids.has(id)) {
+        failures.push({
+          file: toRelativePath(filePath),
+          type: "html",
+          message: `Duplicate id "${id}" at ${getLocation(source, idMatch.index)}`
+        });
+      } else {
+        ids.set(id, idMatch.index);
+      }
+    }
+
+    idMatch = idPattern.exec(source);
+  }
+
+  const buttonPattern = /<button\b([^>]*)>/gi;
+  let buttonMatch = buttonPattern.exec(source);
+
+  while (buttonMatch) {
+    if (!/\btype\s*=/i.test(buttonMatch[1])) {
+      failures.push({
+        file: toRelativePath(filePath),
+        type: "html",
+        message: `Button is missing an explicit type at ${getLocation(source, buttonMatch.index)}`
+      });
+    }
+
+    buttonMatch = buttonPattern.exec(source);
+  }
+}
+
 walkDirectory(projectRoot);
 jsFiles.sort().forEach(checkJavaScriptSyntax);
 jsonFiles.sort().forEach(checkJsonSyntax);
 cssFiles.sort().forEach(checkCssSyntax);
+htmlFiles.sort().forEach(checkHtmlStaticMarkup);
 
 if (failures.length) {
   console.error("Static checks failed:");
@@ -187,4 +233,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Static checks passed: ${jsFiles.length} JavaScript files, ${jsonFiles.length} JSON files, and ${cssFiles.length} CSS files.`);
+console.log(`Static checks passed: ${jsFiles.length} JavaScript files, ${jsonFiles.length} JSON files, ${cssFiles.length} CSS files, and ${htmlFiles.length} HTML files.`);
